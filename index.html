@@ -3,115 +3,147 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f5f8f6">
   <title>Elevator Configurator</title>
   <link rel="stylesheet" href="./style.css">
+
+  <!-- Three.js: no addons, no OrbitControls, fixed camera only -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
     }
   }
   </script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand-block">
-      <div class="eyebrow">3D ELEVATOR CONFIGURATOR</div>
-      <h1>Elevator Configurator</h1>
-    </div>
-    <div class="top-actions">
-      <span id="cloudStatus" class="status">Firebase: connecting…</span>
-      <button id="resetBtn" class="ghost">↻ Reset</button>
-    </div>
-  </header>
+<header class="topbar">
+  <div class="brand">
+    <div class="eyebrow">3D ELEVATOR CONFIGURATOR</div>
+    <h1>Elevator Configurator</h1>
+  </div>
+  <div class="top-actions">
+    <span id="cloudStatus" class="cloud-status">Local demo</span>
+    <button id="resetBtn" class="top-btn" type="button">↻ Reset</button>
+  </div>
+</header>
 
-  <main class="app-shell">
-    <aside class="control-panel">
-      <div class="intro">
-        <div class="eyebrow">THIẾT KẾ CABIN</div>
-        <h2>Chọn cấu hình</h2>
-        <p>Thay đổi vật liệu và xem trực tiếp bên phải.</p>
+<main class="app">
+  <aside class="controls">
+    <div class="intro">
+      <div class="eyebrow">THIẾT KẾ CABIN</div>
+      <h2>Chọn cấu hình</h2>
+      <p>Chọn vật liệu bên dưới và xem cabin thay đổi trực tiếp.</p>
+    </div>
+
+    <section class="panel open" data-section="cabin">
+      <button class="section-title" type="button" data-toggle="cabin">
+        <span class="num">01</span><span>CABIN</span><span class="chevron">⌄</span>
+      </button>
+      <div class="section-body">
+        <div id="cabinChoices" class="cabin-grid"></div>
       </div>
+    </section>
 
-      <section class="section">
-        <div class="section-head"><span>01</span><b>CABIN</b><i>›</i></div>
-        <div id="cabinChoices" class="choice-grid"></div>
-      </section>
-
-      <section class="section">
-        <div class="section-head"><span>02</span><b>3 WALLS</b><i>›</i></div>
-        <div class="segmented">
-          <button data-wall-mode="same" class="active">Đồng bộ</button>
-          <button data-wall-mode="independent">3 vách riêng</button>
-          <button data-wall-mode="pattern">Ăn mòn hoa văn</button>
+    <section class="panel open" data-section="walls">
+      <button class="section-title" type="button" data-toggle="walls">
+        <span class="num">02</span><span>3 WALLS</span><span class="chevron">⌄</span>
+      </button>
+      <div class="section-body">
+        <div class="mode-grid" id="wallModes">
+          <button type="button" data-wall-mode="same">Đồng bộ</button>
+          <button type="button" data-wall-mode="independent">3 vách riêng</button>
+          <button type="button" data-wall-mode="pattern">Ăn mòn hoa văn</button>
         </div>
         <div id="wallZones" class="zone-grid"></div>
-        <div id="wallMaterials" class="swatches"></div>
-      </section>
+        <div id="wallMaterials" class="swatch-grid"></div>
+      </div>
+    </section>
 
-      <section class="section collapsible">
-        <div class="section-head"><span>03</span><b>FLOOR</b><i>›</i></div>
-        <div id="floorChoices" class="cards"></div>
-      </section>
-      <section class="section collapsible">
-        <div class="section-head"><span>04</span><b>CEILING</b><i>›</i></div>
-        <div id="ceilingChoices" class="cards"></div>
-      </section>
-      <section class="section collapsible">
-        <div class="section-head"><span>05</span><b>DOOR</b><i>›</i></div>
-        <div id="doorChoices" class="cards"></div>
-      </section>
-      <section class="section collapsible">
-        <div class="section-head"><span>06</span><b>HANDRAIL</b><i>›</i></div>
-        <div id="handrailChoices" class="cards"></div>
-      </section>
-      <section class="section collapsible">
-        <div class="section-head"><span>07</span><b>COP</b><i>›</i></div>
-        <div id="copChoices" class="cards"></div>
-      </section>
-      <section class="section collapsible">
-        <div class="section-head"><span>08</span><b>LIGHTING</b><i>›</i></div>
-        <div id="lightingChoices" class="cards"></div>
-      </section>
-      <section class="section summary collapsible">
-        <div class="section-head"><span>09</span><b>CONFIGURATION</b><i>›</i></div>
-        <pre id="configPreview"></pre>
-      </section>
+    <section class="panel" data-section="floor">
+      <button class="section-title" type="button" data-toggle="floor">
+        <span class="num">03</span><span>FLOOR</span><span class="chevron">›</span>
+      </button>
+      <div class="section-body hidden"><div id="floorChoices" class="option-grid"></div></div>
+    </section>
 
-      <button class="quote-btn" type="button">▣ &nbsp; Xem báo giá <span>›</span></button>
-    </aside>
+    <section class="panel" data-section="ceiling">
+      <button class="section-title" type="button" data-toggle="ceiling">
+        <span class="num">04</span><span>CEILING</span><span class="chevron">›</span>
+      </button>
+      <div class="section-body hidden"><div id="ceilingChoices" class="option-grid"></div></div>
+    </section>
 
-    <section class="workspace">
-      <div class="viewer-card">
-        <div class="viewer-header">
-          <div>
-            <strong id="cabinTitle">GV-001 · Champagne Classic</strong>
-            <span id="modeTitle">3 Walls · Same Material</span>
-          </div>
-          <div class="fixed-badge">CABIN PREVIEW · FIXED</div>
+    <section class="panel" data-section="door">
+      <button class="section-title" type="button" data-toggle="door">
+        <span class="num">05</span><span>DOOR</span><span class="chevron">›</span>
+      </button>
+      <div class="section-body hidden"><div id="doorChoices" class="option-grid"></div></div>
+    </section>
+
+    <section class="panel" data-section="handrail">
+      <button class="section-title" type="button" data-toggle="handrail">
+        <span class="num">06</span><span>HANDRAIL</span><span class="chevron">›</span>
+      </button>
+      <div class="section-body hidden"><div id="handrailChoices" class="option-grid"></div></div>
+    </section>
+
+    <section class="panel" data-section="cop">
+      <button class="section-title" type="button" data-toggle="cop">
+        <span class="num">07</span><span>COP</span><span class="chevron">›</span>
+      </button>
+      <div class="section-body hidden"><div id="copChoices" class="option-grid"></div></div>
+    </section>
+
+    <section class="panel" data-section="lighting">
+      <button class="section-title" type="button" data-toggle="lighting">
+        <span class="num">08</span><span>LIGHTING</span><span class="chevron">›</span>
+      </button>
+      <div class="section-body hidden"><div id="lightingChoices" class="option-grid"></div></div>
+    </section>
+
+    <section class="panel" data-section="configuration">
+      <button class="section-title" type="button" data-toggle="configuration">
+        <span class="num">09</span><span>CONFIGURATION</span><span class="chevron">›</span>
+      </button>
+      <div class="section-body hidden"><pre id="configPreview"></pre></div>
+    </section>
+
+    <button id="quoteBtn" class="quote-btn" type="button">
+      <span>▣</span> Xem báo giá <b>›</b>
+    </button>
+  </aside>
+
+  <section class="preview">
+    <div class="viewer-card">
+      <div class="viewer-head">
+        <div>
+          <strong id="cabinTitle">GV-001 · Champagne Classic</strong>
+          <span id="modeTitle">3 Walls · Same Material</span>
         </div>
-
-        <div class="viewer-stage">
-          <div id="viewer"></div>
-          <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <strong>Đang khởi tạo 3D…</strong>
-            <span>Đang chuẩn bị cabin</span>
-          </div>
-          <div class="dimension-card">
-            <strong>◇ &nbsp; Kích thước cabin</strong>
-            <div><span>Ngang rộng:</span><b>1400 mm</b></div>
-            <div><span>Sâu:</span><b>1200 mm</b></div>
-            <div><span>Cao:</span><b>2400 mm</b></div>
-          </div>
-        </div>
+        <div class="fixed-badge">CABIN PREVIEW · FIXED</div>
       </div>
 
-      <div class="mobile-controls-spacer"></div>
-    </section>
-  </main>
+      <div id="viewerStage" class="viewer-stage">
+        <div id="viewer"></div>
+        <div id="loading" class="loading">
+          <div class="spinner"></div>
+          <strong>Đang khởi tạo 3D…</strong>
+          <span>Đang chuẩn bị cabin</span>
+        </div>
+        <div class="dimensions">
+          <strong>◇ &nbsp; Kích thước cabin</strong>
+          <div><span>Ngang rộng</span><b>1400 mm</b></div>
+          <div><span>Sâu</span><b>1200 mm</b></div>
+          <div><span>Cao</span><b>2400 mm</b></div>
+        </div>
+        <div class="view-note">Góc nhìn cố định · Mặt trước mở</div>
+      </div>
+    </div>
+  </section>
+</main>
 
-  <script type="module" src="./app.js"></script>
+<div id="toast" class="toast" aria-live="polite"></div>
+<script type="module" src="./app.js"></script>
 </body>
 </html>
