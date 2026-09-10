@@ -148,7 +148,7 @@ function initThree() {
   scene.background = new THREE.Color(0xf0f3f2);
 
   camera = new THREE.PerspectiveCamera(45, 1, 0.05, 100);
-  camera.position.set(3.15, 2.25, 3.35);
+  camera.position.set(0, 1.48, 4.35);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -160,15 +160,14 @@ function initThree() {
   textureLoader = new THREE.TextureLoader();
 
   controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 1.12, 0);
+  controls.target.set(0, 1.22, 0.48);
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
-  controls.minDistance = 2.1;
-  controls.maxDistance = 7;
-  controls.enablePan = true;
-  controls.panSpeed = 0.55;
+  controls.minDistance = 3.15;
+  controls.maxDistance = 6.4;
+  controls.enablePan = false;
   controls.zoomSpeed = 0.7;
-  controls.rotateSpeed = 0.55;
+  controls.rotateSpeed = 0.45;
   controls.update();
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0xb9c0c4, 2.1));
@@ -238,12 +237,6 @@ function rebuildCabin() {
   addBox("right", [t, D, H], [W / 2 - t / 2, 0, H / 2], wallMaterial("right"));
   addBox("ceiling", [W, D, t], [0, 0, H - t / 2], ceilingMaterial());
 
-  const door = doorMaterial();
-  const gap = 0.04;
-  const leaf = (W * 0.48 - gap) / 2;
-  addBox("doorL", [leaf, t, H * 0.83], [-(gap + leaf) / 2, -D / 2 + t / 2, H * 0.415], door);
-  addBox("doorR", [leaf, t, H * 0.83], [(gap + leaf) / 2, -D / 2 + t / 2, H * 0.415], door);
-
   addBox("topTrim", [W, 0.045, 0.12], [0, D / 2 - 0.06, H - 0.12], ceilingMaterial());
   addHandrail();
   addCop();
@@ -288,6 +281,13 @@ function applyLighting() {
   }
 }
 
+function resetCamera() {
+  if (!camera || !controls) return;
+  camera.position.set(0, 1.48, 4.35);
+  controls.target.set(0, 1.22, 0.48);
+  controls.update();
+}
+
 function resize() {
   if (!renderer || !camera || !viewer) return;
   const rect = viewer.getBoundingClientRect();
@@ -308,6 +308,8 @@ function renderCabins() {
     card.onclick = () => {
       state.cabin = index;
       $("#cabinTitle").textContent = `${item.code} · ${item.name}`;
+      rebuildCabin();
+      resetCamera();
       renderCabins();
       updateConfig();
     };
@@ -431,9 +433,11 @@ function setupEvents() {
     $("#cabinTitle").textContent = `${manifest.cabin[0].code} · ${manifest.cabin[0].name}`;
     rebuildCabin();
     renderAllChoices();
+    resetCamera();
   });
 
   $("#retryBtn").addEventListener("click", () => location.reload());
+  $("#cameraResetBtn").addEventListener("click", resetCamera);
 }
 
 async function setupFirebaseInBackground() {
