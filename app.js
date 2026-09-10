@@ -248,12 +248,12 @@ function buildWallPanel(width,height,depth,material){
   const edge=.012;
 
   [-width/2+edge/2,width/2-edge/2].forEach(x=>{
-    const v=box(.012,height,.014,trim);
+    const v=box(.009,height,.012,trim);
     v.position.set(x,0,-depth/2-.008);
     g.add(v);
   });
 
-  const top=box(width,.012,.014,trim);
+  const top=box(width,.009,.012,trim);
   top.position.set(0,height/2,-depth/2-.008);
   g.add(top);
 
@@ -305,28 +305,48 @@ function createCabin(){
   wallMeshes.right.position.set(DIM.w/2-.019,DIM.h/2,0);
   cabinRoot.add(wallMeshes.right);
 
-  /* Rear wall = 3 balanced panels */
+  /* Rear wall — full-height continuous backing first.
+     This prevents any white/background gap from appearing behind
+     the decorative panel divisions. */
   const rear=new THREE.Group();
-  const panelGap=.012;
-  const rearW=(DIM.w-.10-panelGap*2)/3;
+
+  const rearBacking=box(DIM.w-.075,DIM.h-.075,.040,wall);
+  rearBacking.position.set(0,DIM.h/2,.0);
+  rear.add(rearBacking);
+
+  /* Three visual panels on the rear wall.
+     Only subtle dark seams are used between panels — no bright
+     vertical white strips. */
+  const panelGap=.010;
+  const rearW=(DIM.w-.075-panelGap*2)/3;
 
   for(let i=0;i<3;i++){
-    const p=buildWallPanel(rearW,DIM.h-.11,.035,wall);
-    p.position.x=(i-1)*(rearW+panelGap);
-    p.position.y=.055;
+    const p=box(rearW,DIM.h-.115,.012,wall);
+    p.position.set((i-1)*(rearW+panelGap),DIM.h/2-.005,-.026);
     rear.add(p);
   }
 
-  /* lower kick panel */
-  const kick=box(DIM.w-.07,.12,.045,trim);
-  kick.position.set(0,.10,DIM.d/2-.022);
+  /* Subtle panel seams */
+  const seamMat=darkTrimMaterial();
+  for(const x of [-rearW/2-panelGap/2,rearW/2+panelGap/2]){
+    const seam=box(.006,DIM.h-.18,.010,seamMat);
+    seam.position.set(x,DIM.h/2-.01,-.036);
+    rear.add(seam);
+  }
+
+  /* Lower kick panel */
+  const kick=box(DIM.w-.075,.105,.050,trim);
+  kick.position.set(0,.085,-.012);
   rear.add(kick);
 
-  rear.position.set(0,DIM.h/2,.0);
-  rear.position.y=0;
-  rear.position.z=DIM.d/2-.018;
+  rear.position.set(0,0,DIM.d/2-.018);
   cabinRoot.add(rear);
   wallMeshes.back=rear;
+
+  /* IMPORTANT:
+     The front is intentionally completely open in the preview.
+     No door leaves, glass panels, or white door placeholders are
+     created here. */
 
   /* Vertical corner trims */
   [-DIM.w/2+.028,DIM.w/2-.028].forEach(x=>{
