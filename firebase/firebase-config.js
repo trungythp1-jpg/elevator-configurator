@@ -1,7 +1,5 @@
-// Firebase Web SDK configuration.
-// This is client-side configuration, not a private service-account key.
-// Keep Firestore/Auth security in Firebase Rules.
-
+// Firebase Web SDK configuration for project: elevator-configurator-ac760
+// This file contains the public web app configuration. Security is enforced by Firebase rules.
 export const firebaseConfig = {
   apiKey: "AIzaSyATAShAE4dBaU5fPAE1l_5sTe7WaUPumDA",
   authDomain: "elevator-configurator-ac760.firebaseapp.com",
