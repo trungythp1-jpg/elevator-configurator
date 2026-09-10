@@ -1,705 +1,124 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
-import { firebaseConfig } from "./firebase/firebase-config.js";
+===== app.js =====
 
-const $ = (s) => document.querySelector(s);
+import * as THREE from "three";
 
-const fallback = {
-  cabin: [
-    {code:"GV-001",name:"Champagne Classic"},
-    {code:"GV-002",name:"Titanium Modern"},
-    {code:"GV-003",name:"Dark Luxury"}
-  ],
-  walls: ["I01","I02","I03","I04","I05","I06","I07","I08"].map((code,i)=>({
-    code,
-    name:[
-      "Inox Champagne Hairline","Inox Titanium Mirror","Inox Silver Hairline",
-      "Inox Black Mirror","Inox Rose Hairline","Inox Bronze Mirror",
-      "Inox Deep Blue Hairline","Inox Pearl Etched"
-    ][i]
-  })),
-  floor: ["S01","S02","S03","S04","S05","S06"].map((code,i)=>({
-    code,name:["Granite Light","Granite Dark","Black Stone","Warm Stone","Grey Ceramic","Ivory Ceramic"][i]
-  })),
-  ceiling: ["T01","T02","T03","T04","T05","T06"].map((code,i)=>({
-    code,name:["Silver Ceiling","Black Ceiling","Champagne Ceiling","White Ceiling","Mirror Ceiling","Star Grid Ceiling"][i]
-  })),
-  doors: ["C01","C02","C03","C04","C05","C06"].map((code,i)=>({
-    code,name:["Two-panel Silver","Two-panel Black","Two-panel Champagne","Center-opening Bronze","Glass Dark","Glass Smoke"][i]
-  })),
-  handrail: ["H01","H02","H03","H04"].map((code,i)=>({
-    code,name:["Round Silver","Round Black","Round Champagne","Square Bronze"][i]
-  })),
-  cop: ["P01","P02","P03","P04"].map((code,i)=>({
-    code,name:["Stainless COP","Black Glass COP","Champagne COP","Dark Bronze COP"][i]
-  })),
-  lighting: ["L01","L02","L03","L04"].map((code,i)=>({
-    code,name:["Warm 3000K","Neutral 4000K","Cool 6000K","Perimeter LED"][i]
-  }))
-};
+const DIM={w:1.4,d:1.2,h:2.4};
+const state={cabin:"GV-001",style:"Sang trọng",wall:"I01",floor:"S02",ceiling:"T01",door:"C01",handrail:"H01",cop:"P01",lighting:"L02",doorOpen:true,view:"front",angle:0};
 
-let library = structuredClone(fallback);
+const cabins=[
+["GV-001","Tiêu chuẩn","Champagne"],["GV-002","Sang trọng","Silver"],["GV-003","Gia đình","Black"],
+["GV-004","Kính toàn cảnh","Glass"],["GV-005","Tải hàng","Bronze"],["GV-006","Theo yêu cầu","Gold"],
+["GV-007","Classic Wood","Wood"],["GV-008","Panoramic","Blue Glass"],["GV-009","Luxury Gold","Luxury"]
+];
+const infoRows=()=>[
+["Mã mẫu",state.cabin],["Kiểu cabin",cabins.find(x=>x[0]===state.cabin)?.[1]||"Sang trọng"],
+["Vách","Inox vàng hoa văn"],["Sàn","Đá marble đen viền vàng"],["Trần","LED hoa văn"],["Cửa","Inox vàng"],
+["Tay vịn","Không"],["Bảng điều khiển","Mẫu tiêu chuẩn"]
+];
 
-const state = {
-  cabin:0,
-  wallMode:"same",
-  wallTarget:"left",
-  walls:{left:0,back:0,right:0},
-  floor:0,
-  ceiling:0,
-  door:0,
-  handrail:0,
-  cop:0,
-  lighting:0
-};
+let scene,camera,renderer,root,doorGroup,wallGroup,ceiling,lights=[];
+const viewer=document.querySelector("#viewer");
 
-const COLORS = {
-  I01:0xc3a36e,I02:0x87919b,I03:0xb8bec3,I04:0x20262d,
-  I05:0xa97972,I06:0x6b4a2e,I07:0x314a63,I08:0xc8c7bd,
-  S01:0xa9a9a3,S02:0x47494a,S03:0x1b1c1e,S04:0x766655,S05:0x81868a,S06:0xd2cbbc,
-  T01:0xaab0b5,T02:0x20252a,T03:0xb49666,T04:0xe1e2e1,T05:0x777d82,T06:0x55595e,
-  C01:0x9ea5ab,C02:0x24282d,C03:0xb39769,C04:0x664b37,C05:0x20262b,C06:0x4f5860,
-  H01:0xb4bac0,H02:0x20242a,H03:0xb39461,H04:0x62452f,
-  P01:0x899096,P02:0x171b20,P03:0xb39668,P04:0x493126
-};
+function mat(color,rough=.4,metal=.4){return new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});}
+function box(w,h,d,m){const x=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);x.castShadow=true;x.receiveShadow=true;return x;}
+function createScene(){
+ scene=new THREE.Scene();scene.background=new THREE.Color(0xb8c1c5);
+ camera=new THREE.PerspectiveCamera(39,1,.05,30);
+ renderer=new THREE.WebGLRenderer({antialias:true});
+ renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.enabled=true;
+ viewer.appendChild(renderer.domElement);
 
-const viewer = $("#viewer");
-const loading = $("#loading");
-const loadingText = $("#loadingText");
-const firebaseStatus = $("#firebaseStatus");
+ scene.add(new THREE.HemisphereLight(0xffffff,0x66727a,1.8));
+ const key=new THREE.DirectionalLight(0xffffff,2.8);key.position.set(-2,4,-4);key.castShadow=true;scene.add(key);
+ const fill=new THREE.DirectionalLight(0xffe2c0,1.1);fill.position.set(2,2,-3);scene.add(fill);
 
-let scene, camera, renderer, cabinGroup;
-let resizeObserver;
-const textureCache = new Map();
-
-function item(cat,index){
-  const list = library[cat] || [];
-  return list.length ? list[index % list.length] : {code:"",name:""};
+ root=new THREE.Group();scene.add(root);
+ buildCabin(); resize(); requestAnimationFrame(loop);
+ window.addEventListener("resize",resize);
+ document.querySelector("#loading").style.display="none";
 }
-
-function assetPath(cat,code){
-  return `./assets/${cat}/${code}.png`;
-}
-
-function material(cat,index,roughness=.45,metalness=.65){
-  const data = item(cat,index);
-  const m = new THREE.MeshStandardMaterial({
-    color: COLORS[data.code] ?? 0x888888,
-    roughness,
-    metalness
-  });
-
-  const url = assetPath(cat,data.code);
-  if(!textureCache.has(url)){
-    const tex = new THREE.TextureLoader().load(url);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(cat === "walls" ? 1.2 : 1, cat === "walls" ? 1.8 : 1);
-    textureCache.set(url,tex);
-  }
-
-  m.map = textureCache.get(url);
-  m.needsUpdate = true;
-  return m;
-}
-
-function addBox(name,size,position,mat,parent=cabinGroup){
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size),mat);
-  mesh.name = name;
-  mesh.position.set(...position);
-  parent.add(mesh);
-  return mesh;
-}
-
-function disposeObject(obj){
-  obj.traverse?.(node=>{
-    if(node.geometry) node.geometry.dispose();
-    if(node.material){
-      const materials = Array.isArray(node.material) ? node.material : [node.material];
-      materials.forEach(m=>m.dispose?.());
-    }
-  });
-}
-
-function clearCabin(){
-  while(cabinGroup.children.length){
-    const obj = cabinGroup.children.pop();
-    disposeObject(obj);
-  }
-}
-
 function buildCabin(){
-  clearCabin();
+ while(root.children.length)root.remove(root.children[0]);
+ const wall=mat(0xd3b07a,.27,.72), dark=mat(0x27282b,.38,.7), floorM=mat(0x28282a,.62,.12);
+ const inner=mat(0xd7c09b,.32,.6);
 
-  // Exact demo cabin dimensions:
-  // Width 1400 mm, Depth 1200 mm, Height 2400 mm.
-  const W = 1.40;
-  const D = 1.20;
-  const H = 2.40;
-  const wallT = .045;
-  const floorT = .055;
-
-  // Floor
-  addBox(
-    "floor",
-    [W,D,floorT],
-    [0,0,floorT/2],
-    material("floor",state.floor,.72,.18)
-  );
-
-  // Three primary walls
-  addBox(
-    "wall-left",
-    [wallT,D,H],
-    [-W/2 + wallT/2,0,H/2],
-    material("walls",state.walls.left,.42,.72)
-  );
-
-  addBox(
-    "wall-back",
-    [W,wallT,H],
-    [0,D/2 - wallT/2,H/2],
-    material("walls",state.walls.back,.42,.72)
-  );
-
-  addBox(
-    "wall-right",
-    [wallT,D,H],
-    [W/2 - wallT/2,0,H/2],
-    material("walls",state.walls.right,.42,.72)
-  );
-
-  // Ceiling
-  addBox(
-    "ceiling",
-    [W,D,wallT],
-    [0,0,H-wallT/2],
-    material("ceiling",state.ceiling,.34,.72)
-  );
-
-  // Open front: only frame, no door leaf blocking the view.
-  const doorMat = material("doors",state.door,.28,.76);
-  const frame = .055;
-
-  addBox("front-left-frame",[frame,.055,H],
-    [-W/2+frame/2,-D/2+.025,H/2],doorMat);
-
-  addBox("front-right-frame",[frame,.055,H],
-    [W/2-frame/2,-D/2+.025,H/2],doorMat);
-
-  addBox("front-top-frame",[W,.055,frame],
-    [0,-D/2+.025,H-frame/2],doorMat);
-
-  // Handrail on rear wall
-  const railMat = material("handrail",state.handrail,.25,.82);
-  const rail = new THREE.Mesh(
-    new THREE.CylinderGeometry(.026,.026,.88,24),
-    railMat
-  );
-  rail.rotation.z = Math.PI/2;
-  rail.position.set(0,D/2-.075,1.12);
-  cabinGroup.add(rail);
-
-  // COP on right wall
-  const copMat = material("cop",state.cop,.27,.72);
-  const cop = addBox(
-    "cop",
-    [.26,.045,.58],
-    [W/2-.10,-.02,1.20],
-    copMat
-  );
-  cop.rotation.y = Math.PI/2;
-
-  // Ceiling decorative panel
-  const panelMat = new THREE.MeshStandardMaterial({
-    color:0x20252a,
-    roughness:.28,
-    metalness:.55
-  });
-  addBox("ceiling-panel",[.76,.52,.018],[0,.04,H-.08],panelMat);
-
-  // Lighting
-  const lightingCode = item("lighting",state.lighting).code;
-  const lightColor = {
-    L01:0xffd07b,
-    L02:0xfff2d9,
-    L03:0xbfe4ff,
-    L04:0xffffff
-  }[lightingCode] || 0xffffff;
-
-  const lightIntensity = {
-    L01:3.2,
-    L02:3.0,
-    L03:2.8,
-    L04:3.6
-  }[lightingCode] || 3;
-
-  [
-    [-.48,-.38],[.48,-.38],
-    [-.48,.34],[.48,.34]
-  ].forEach(([x,z])=>{
-    const bulb = new THREE.Mesh(
-      new THREE.CylinderGeometry(.055,.055,.015,24),
-      new THREE.MeshStandardMaterial({
-        color:0xffffff,
-        emissive:lightColor,
-        emissiveIntensity:1.8
-      })
-    );
-    bulb.rotation.x = Math.PI/2;
-    bulb.position.set(x,z,H-.055);
-    cabinGroup.add(bulb);
-
-    const point = new THREE.PointLight(
-      lightColor,
-      lightIntensity,
-      3.4,
-      2
-    );
-    point.position.set(x,z,H-.15);
-    cabinGroup.add(point);
-  });
-
-  // Demo etched pattern mode
-  if(state.wallMode === "pattern"){
-    const patternMat = new THREE.MeshStandardMaterial({
-      color:0xd7b78e,
-      roughness:.28,
-      metalness:.72,
-      emissive:0x1b1007,
-      emissiveIntensity:.08
-    });
-
-    const patternPanel = addBox(
-      "etched-pattern-panel",
-      [.82,.018,1.70],
-      [0,D/2-.028,1.30],
-      patternMat
-    );
-
-    for(let i=0;i<5;i++){
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(.13,.012,8,32,Math.PI*1.35),
-        patternMat
-      );
-      ring.rotation.x = Math.PI/2;
-      ring.position.set(-.22+i*.11,D/2-.04,.55+i*.18);
-      cabinGroup.add(ring);
-    }
-
-    patternPanel.userData.isPattern = true;
-  }
-
-  applyCamera();
+ root.add(box(DIM.w,.045,DIM.d,floorM));root.children.at(-1).position.y=.0225;
+ const left=box(.035,DIM.h,DIM.d,wall);left.position.set(-DIM.w/2+.0175,DIM.h/2,0);root.add(left);
+ const back=box(DIM.w,DIM.h,.035,inner);back.position.set(0,DIM.h/2,DIM.d/2-.0175);root.add(back);
+ const right=box(.035,DIM.h,DIM.d,wall);right.position.set(DIM.w/2-.0175,DIM.h/2,0);root.add(right);
+ // decorative vertical panels
+ for(const x of [-.62,.62]){
+   const deco=box(.16,1.75,.018,dark);deco.position.set(x,1.32,.57);root.add(deco);
+   const innerLine=box(.018,1.48,.012,mat(0xd9b86f,.3,.75));innerLine.position.set(x,1.32,.555);root.add(innerLine);
+ }
+ // ceiling frame and luminous panel
+ const cf=box(DIM.w-.10,.055,DIM.d-.10,mat(0x6e4a1f,.3,.75));cf.position.y=2.355;root.add(cf);
+ const lp=box(.75,.025,.48,mat(0xfff1d0,.12,.15));lp.position.y=2.39;root.add(lp);
+ // lights
+ for(const x of [-.46,.46])for(const z of [-.35,.35]){
+   const l=new THREE.PointLight(0xffdfad,1.8,.95,2);l.position.set(x,2.31,z);root.add(l);
+   const disk=box(.14,.012,.14,mat(0xfff1cf,.1,.1));disk.position.set(x,2.37,z);root.add(disk);
+ }
+ doorGroup=new THREE.Group();root.add(doorGroup);buildDoor();
+ buildRail();buildCOP();
 }
-
-function init3D(){
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf1f5f3);
-
-  camera = new THREE.PerspectiveCamera(40,1,.05,100);
-
-  renderer = new THREE.WebGLRenderer({
-    antialias:true,
-    powerPreference:"high-performance"
-  });
-
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.5));
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.setClearColor(0xf1f5f3,1);
-
-  viewer.innerHTML = "";
-  viewer.appendChild(renderer.domElement);
-
-  scene.add(new THREE.HemisphereLight(0xffffff,0x78837f,2.0));
-
-  const key = new THREE.DirectionalLight(0xffffff,2.5);
-  key.position.set(-2,4,-4);
-  scene.add(key);
-
-  const fill = new THREE.DirectionalLight(0xffffff,1.4);
-  fill.position.set(3,2,-5);
-  scene.add(fill);
-
-  cabinGroup = new THREE.Group();
-  scene.add(cabinGroup);
-
-  buildCabin();
-  applyCamera();
+function buildDoor(){
+ while(doorGroup.children.length)doorGroup.remove(doorGroup.children[0]);
+ const dm=mat(0xc8a76b,.25,.8), glass=mat(0x9a784c,.22,.65);
+ if(state.doorOpen){
+   // door leaves parked at the sides, keeping the cabin view open
+   for(const x of [-.54,.54]){const p=box(.06,2.2,.028,dm);p.position.set(x,1.1,-.62);doorGroup.add(p)}
+ }else{
+   for(const x of [-.33,.33]){const p=box(.325,2.2,.03,glass);p.position.set(x,1.1,-.62);doorGroup.add(p)}
+ }
 }
-
-function applyCamera(){
-  if(!renderer || !camera || !viewer) return;
-
-  const r = viewer.getBoundingClientRect();
-  if(!r.width || !r.height) return;
-
-  renderer.setSize(r.width,r.height,false);
-  camera.aspect = r.width/r.height;
-
-  /*
-    Fixed front view.
-
-    Cabin front is Z = -0.60.
-    Camera is always at NEGATIVE Z, outside the open front.
-
-    The iPad portrait framing is intentionally wide and distant so
-    the complete cabin can remain visible from floor to ceiling.
-  */
-  const portrait = r.height >= r.width;
-
-  if(portrait){
-    camera.fov = 43;
-    camera.position.set(.55,1.52,-6.20);
-    camera.lookAt(0,1.00,0.08);
-  }else{
-    camera.fov = 39;
-    camera.position.set(.62,1.48,-5.55);
-    camera.lookAt(0,.99,0.08);
-  }
-
-  camera.updateProjectionMatrix();
+function buildRail(){
+ const rmat=mat(0xc7a35f,.22,.8);const bar=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.82,20),rmat);bar.rotation.z=Math.PI/2;bar.position.set(0,1.05,.565);root.add(bar);
 }
-
-function resize3D(){
-  applyCamera();
+function buildCOP(){
+ const p=box(.11,.52,.03,mat(0x191b1d,.25,.65));p.position.set(.61,1.25,-.015);root.add(p);
+ const s=box(.075,.08,.012,mat(0x08131a,.12,.35));s.position.set(.61,1.38,-.035);root.add(s);
 }
-
-function renderCabins(){
-  const el = $("#cabinChoices");
-  if(!el) return;
-
-  el.innerHTML = "";
-
-  library.cabin.forEach((data,index)=>{
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `cabin-card ${index === state.cabin ? "active" : ""}`;
-
-    const background =
-      index === 0
-        ? "linear-gradient(120deg,#cbb58c,#eee1ca)"
-        : index === 1
-          ? "linear-gradient(120deg,#8e979f,#e3e7e9)"
-          : "linear-gradient(120deg,#22282d,#697176)";
-
-    button.innerHTML = `
-      <div class="cabin-thumb" style="background:${background}">
-        <span class="cabin-code">${data.code}</span>
-      </div>
-      <span class="card-label">${data.code} · ${data.name}</span>
-    `;
-
-    button.addEventListener("click",()=>{
-      state.cabin = index;
-      renderCabins();
-      updateConfig();
-    });
-
-    el.appendChild(button);
-  });
+function resize(){
+ const r=viewer.getBoundingClientRect();if(!r.width||!r.height)return;
+ renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;
+ const portrait=r.height>r.width*1.1;
+ camera.position.set(state.angle*.85,1.34,portrait?-5.45:-5.05);
+ camera.lookAt(0,1.12,.12);camera.updateProjectionMatrix();
 }
+function loop(){requestAnimationFrame(loop);if(renderer)renderer.render(scene,camera)}
 
-function renderWallModes(){
-  document.querySelectorAll("#wallModes [data-mode]").forEach(button=>{
-    button.classList.toggle(
-      "active",
-      button.dataset.mode === state.wallMode
-    );
-  });
+function renderCabinStyles(){
+ const el=document.querySelector("#cabinStyleGrid");el.innerHTML="";
+ [["Tiêu chuẩn","GV-001"],["Sang trọng","GV-002"],["Gia đình","GV-003"],["Kính toàn cảnh","GV-004"],["Tải hàng","GV-005"],["Theo yêu cầu","GV-006"]].forEach(([name,code],i)=>{
+   const b=document.createElement("button");b.className="style-card"+(state.style===name?" active":"");b.innerHTML=`<div class="style-thumb"></div><div class="style-name">${name}</div>`;
+   b.onclick=()=>{state.style=name;state.cabin=code;renderAll();toast(`Đã chọn ${name}`)};el.appendChild(b);
+ });
 }
-
-function renderWalls(){
-  const choices = $("#wallChoices");
-  if(!choices) return;
-
-  choices.innerHTML = "";
-
-  const labels = {
-    left:"Vách trái",
-    back:"Vách sau",
-    right:"Vách phải"
-  };
-
-  Object.entries(labels).forEach(([key,label])=>{
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className =
-      `zone-selector ${state.wallTarget === key ? "active" : ""}`;
-
-    button.textContent =
-      `${label} · ${item("walls",state.walls[key]).code}`;
-
-    button.addEventListener("click",()=>{
-      state.wallTarget = key;
-      renderWalls();
-    });
-
-    // Zone selectors use the existing grid styling.
-    button.style.width = "100%";
-    button.style.border = "1px solid var(--line)";
-    button.style.background =
-      state.wallTarget === key ? "var(--soft)" : "#fff";
-    button.style.borderRadius = "11px";
-    button.style.padding = "10px 4px";
-    button.style.cursor = "pointer";
-    button.style.fontSize = "10px";
-    button.style.minHeight = "40px";
-    button.style.color =
-      state.wallTarget === key ? "var(--accent-dark)" : "var(--text)";
-    choices.appendChild(button);
-  });
-
-  library.walls.forEach((data,index)=>{
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className =
-      `swatch ${isWallSelected(index) ? "active" : ""}`;
-    button.style.backgroundImage =
-      `url("${assetPath("walls",data.code)}")`;
-
-    button.innerHTML = `<small>${data.code}</small>`;
-
-    button.addEventListener("click",()=>{
-      if(state.wallMode === "same" || state.wallMode === "pattern"){
-        state.walls = {left:index,back:index,right:index};
-      }else{
-        state.walls[state.wallTarget] = index;
-      }
-
-      buildCabin();
-      renderWalls();
-      updateConfig();
-    });
-
-    choices.appendChild(button);
-  });
+function renderCatalog(){
+ const el=document.querySelector("#cabinCatalog");el.innerHTML="";
+ cabins.forEach(([code,name])=>{
+   const b=document.createElement("button");b.className="catalog-card"+(state.cabin===code?" active":"");
+   b.innerHTML=`<div class="catalog-thumb"></div><div class="catalog-name">${code}</div>`;
+   b.onclick=()=>{state.cabin=code;renderCatalog();renderInfo();toast(`Đã chọn ${code}`)};el.appendChild(b);
+ });
 }
-
-function isWallSelected(index){
-  if(state.wallMode === "same" || state.wallMode === "pattern"){
-    return state.walls.left === index;
-  }
-  return state.walls[state.wallTarget] === index;
+function renderInfo(){
+ document.querySelector("#currentInfo").innerHTML=infoRows().map(([a,b])=>`<div class="info-row"><b>${a}</b><span>${b}</span></div>`).join("");
 }
+function renderAll(){renderCabinStyles();renderCatalog();renderInfo();buildCabin();resize();}
+function toast(s){const e=document.querySelector("#toast");e.textContent=s;e.classList.add("show");clearTimeout(window._t);window._t=setTimeout(()=>e.classList.remove("show"),1600)}
 
-function renderOptions(category,id,stateKey){
-  const el = $("#"+id);
-  if(!el) return;
+document.querySelectorAll(".rail-item").forEach(b=>b.onclick=()=>{document.querySelectorAll(".rail-item").forEach(x=>x.classList.remove("active"));b.classList.add("active");toast(`Mục ${b.querySelector("span").textContent}`)});
+document.querySelectorAll(".filter").forEach(b=>b.onclick=()=>{document.querySelectorAll(".filter").forEach(x=>x.classList.remove("active"));b.classList.add("active")});
+document.querySelector("#doorToggle").onclick=()=>{state.doorOpen=!state.doorOpen;document.querySelector("#doorText").textContent=state.doorOpen?"Mở cửa":"Đóng cửa";buildDoor()};
+document.querySelector("#rotateLeft").onclick=()=>{state.angle=Math.max(-.35,state.angle-.12);resize()};
+document.querySelector("#rotateRight").onclick=()=>{state.angle=Math.min(.35,state.angle+.12);resize()};
+document.querySelectorAll(".view-card").forEach(b=>b.onclick=()=>{document.querySelectorAll(".view-card").forEach(x=>x.classList.remove("active"));b.classList.add("active");state.view=b.dataset.view;toast(`Góc ${b.textContent.trim()}`)});
+document.querySelector("#saveBtn").onclick=()=>toast("Đã lưu cấu hình mẫu");
+document.querySelector("#quoteBtn").onclick=()=>toast("Đã tạo yêu cầu báo giá");
+document.querySelector("#imageBtn").onclick=()=>toast("Demo: chức năng tải ảnh sẵn sàng");
+document.querySelector("#shareBtn").onclick=()=>toast("Demo: chia sẻ mẫu sẵn sàng");
 
-  el.innerHTML = "";
-
-  library[category].forEach((data,index)=>{
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className =
-      `option-card ${state[stateKey] === index ? "active" : ""}`;
-
-    button.innerHTML = `
-      <img src="${assetPath(category,data.code)}" alt="${data.code}">
-      <span class="card-label">${data.code} · ${data.name}</span>
-    `;
-
-    button.addEventListener("click",()=>{
-      state[stateKey] = index;
-      buildCabin();
-      renderOptions(category,id,stateKey);
-      updateConfig();
-    });
-
-    el.appendChild(button);
-  });
-}
-
-function updateConfig(){
-  const output = $("#configOutput");
-  if(!output) return;
-
-  output.textContent = JSON.stringify({
-    cabin:item("cabin",state.cabin).code,
-    dimensions:"1400 × 1200 × 2400 mm",
-    preview:"fixed / front open",
-    camera:"fixed / front / full cabin",
-    walls:{
-      left:item("walls",state.walls.left).code,
-      back:item("walls",state.walls.back).code,
-      right:item("walls",state.walls.right).code
-    },
-    floor:item("floor",state.floor).code,
-    ceiling:item("ceiling",state.ceiling).code,
-    door:item("doors",state.door).code,
-    handrail:item("handrail",state.handrail).code,
-    cop:item("cop",state.cop).code,
-    lighting:item("lighting",state.lighting).code
-  },null,2);
-}
-
-function renderAll(){
-  renderCabins();
-  renderWallModes();
-  renderWalls();
-  renderOptions("floor","floorChoices","floor");
-  renderOptions("ceiling","ceilingChoices","ceiling");
-  renderOptions("doors","doorChoices","door");
-  renderOptions("handrail","handrailChoices","handrail");
-  renderOptions("cop","copChoices","cop");
-  renderOptions("lighting","lightingChoices","lighting");
-  updateConfig();
-}
-
-function reset(){
-  Object.assign(state,{
-    cabin:0,
-    wallMode:"same",
-    wallTarget:"left",
-    walls:{left:0,back:0,right:0},
-    floor:0,
-    ceiling:0,
-    door:0,
-    handrail:0,
-    cop:0,
-    lighting:0
-  });
-
-  renderAll();
-  buildCabin();
-}
-
-function setupEvents(){
-  document.querySelectorAll(".section-title").forEach(button=>{
-    button.addEventListener("click",()=>{
-      const panel = button.closest(".panel");
-      if(!panel) return;
-
-      const body = panel.querySelector(".section-body");
-      if(!body) return;
-
-      const open = panel.classList.toggle("open");
-      body.classList.toggle("hidden",!open);
-
-      const chevron = button.querySelector(".chevron");
-      if(chevron) chevron.textContent = open ? "⌄" : "›";
-    });
-  });
-
-  document.querySelectorAll("#wallModes [data-mode]").forEach(button=>{
-    button.addEventListener("click",()=>{
-      state.wallMode = button.dataset.mode;
-      renderWallModes();
-      renderWalls();
-      buildCabin();
-      updateConfig();
-    });
-  });
-}
-
-async function loadManifest(){
-  try{
-    const response = await fetch(
-      "./assets/asset-manifest.json",
-      {cache:"no-store"}
-    );
-
-    if(!response.ok) return;
-
-    const data = await response.json();
-
-    if(data && typeof data === "object"){
-      library = {...library,...data};
-    }
-  }catch(error){
-    // Local fallback remains active.
-  }
-}
-
-async function loadFirebaseInBackground(){
-  if(!firebaseStatus) return;
-
-  try{
-    firebaseStatus.textContent = "Firebase: connecting…";
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    const snapshot = await Promise.race([
-      getDocs(collection(db,"materials")),
-      new Promise((_,reject)=>
-        setTimeout(()=>reject(new Error("timeout")),5000)
-      )
-    ]);
-
-    snapshot.forEach(doc=>{
-      const data = doc.data();
-      const category = data.category === "wall"
-        ? "walls"
-        : data.category;
-
-      if(!library[category]) return;
-
-      const index = library[category]
-        .findIndex(x=>x.code === data.code);
-
-      if(index >= 0){
-        library[category][index] = {
-          ...library[category][index],
-          ...data
-        };
-      }
-    });
-
-    firebaseStatus.textContent = "Firebase: connected";
-    renderAll();
-    buildCabin();
-
-  }catch(error){
-    firebaseStatus.textContent = "Local demo";
-  }
-}
-
-async function boot(){
-  try{
-    if(loading) loading.classList.remove("hide");
-    if(loadingText) loadingText.textContent = "Đang khởi tạo 3D…";
-
-    // Local assets first. Firebase never blocks the 3D preview.
-    await loadManifest();
-
-    init3D();
-    setupEvents();
-    renderAll();
-
-    requestAnimationFrame(()=>{
-      resize3D();
-      if(loading) loading.classList.add("hide");
-    });
-
-    setTimeout(loadFirebaseInBackground,150);
-
-  }catch(error){
-    console.error(error);
-
-    if(loading) loading.classList.add("hide");
-    if(firebaseStatus) firebaseStatus.textContent = "Local demo";
-  }
-}
-
-window.addEventListener("resize",resize3D,{passive:true});
-
-if("ResizeObserver" in window){
-  resizeObserver = new ResizeObserver(resize3D);
-  resizeObserver.observe(viewer);
-}
-
-boot();
-
-function animate(){
-  requestAnimationFrame(animate);
-
-  if(renderer && scene && camera){
-    renderer.render(scene,camera);
-  }
-}
-
-animate();
+renderAll();
+try{createScene()}catch(e){console.error(e);document.querySelector("#loading").textContent="Không thể khởi tạo 3D";}
