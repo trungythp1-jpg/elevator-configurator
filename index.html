@@ -6,11 +6,6 @@
   <meta name="theme-color" content="#eef2f0">
   <title>Elevator Configurator</title>
   <link rel="stylesheet" href="./style.css">
-
-  <!--
-    Three.js V3 — browser ESM import map.
-    Keep THREE and all addons on the same version/CDN.
-  -->
   <script type="importmap">
   {
     "imports": {
@@ -22,40 +17,24 @@
 </head>
 <body>
   <header class="topbar">
-    <div>
+    <div class="brand-block">
       <div class="eyebrow">3D ELEVATOR CONFIGURATOR</div>
       <h1>Elevator Configurator</h1>
     </div>
     <div class="top-actions">
       <span id="cloudStatus" class="status">Firebase: local demo</span>
-      <button id="resetBtn" class="ghost" type="button">Reset</button>
+      <button id="resetBtn" class="ghost" type="button">↻ Reset</button>
     </div>
   </header>
 
   <main class="app-shell">
-    <section class="viewer-panel">
-      <div id="viewer">
-        <div id="loading" class="loading">
-          <div class="spinner"></div>
-          <strong id="loadingText">Đang khởi tạo 3D…</strong>
-          <small id="loadingDetail">Đang chuẩn bị cabin</small>
-        </div>
-        <div id="errorBox" class="error-box" hidden>
-          <strong>Không thể khởi tạo 3D</strong>
-          <span id="errorText"></span>
-          <button id="retryBtn" type="button">Thử lại</button>
-        </div>
-      </div>
-      <div class="viewer-hud">
-        <div>
-          <strong id="cabinTitle">GV-001 · Champagne Classic</strong>
-          <span id="modeTitle">3 Walls · Same Material</span>
-        </div>
-        <div class="hint">Kéo để xoay · pinch để zoom · 2 ngón để pan</div>
-      </div>
-    </section>
-
     <aside class="control-panel">
+      <div class="panel-intro">
+        <span>THIẾT KẾ CABIN</span>
+        <strong>Chọn cấu hình</strong>
+        <small>Thay đổi vật liệu và xem trực tiếp bên phải.</small>
+      </div>
+
       <div class="section">
         <div class="section-head"><span>01</span><b>CABIN</b></div>
         <div id="cabinChoices" class="choice-grid"></div>
@@ -107,6 +86,35 @@
         <pre id="configPreview"></pre>
       </div>
     </aside>
+
+    <section class="viewer-panel">
+      <div id="viewer">
+        <div class="viewer-topbar">
+          <div>
+            <strong id="cabinTitle">GV-001 · Champagne Classic</strong>
+            <span id="modeTitle">3 Walls · Same Material</span>
+          </div>
+          <span class="preview-badge">CABIN PREVIEW</span>
+        </div>
+
+        <div id="loading" class="loading">
+          <div class="spinner"></div>
+          <strong id="loadingText">Đang khởi tạo 3D…</strong>
+          <small id="loadingDetail">Đang chuẩn bị cabin</small>
+        </div>
+        <div id="errorBox" class="error-box" hidden>
+          <strong>Không thể khởi tạo 3D</strong>
+          <span id="errorText"></span>
+          <button id="retryBtn" type="button">Thử lại</button>
+        </div>
+
+        <div class="viewer-bottom-hud">
+          <span>↔ Kéo để xoay</span>
+          <span>⌕ Pinch để zoom</span>
+          <button id="cameraResetBtn" type="button">↻ Góc nhìn chuẩn</button>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script type="module" src="./app.js"></script>
