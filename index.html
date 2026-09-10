@@ -1,11 +1,24 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f5f7f7">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#eef2f0">
   <title>Elevator Configurator</title>
   <link rel="stylesheet" href="./style.css">
+
+  <!--
+    Three.js V3 — browser ESM import map.
+    Keep THREE and all addons on the same version/CDN.
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -13,83 +26,87 @@
       <div class="eyebrow">3D ELEVATOR CONFIGURATOR</div>
       <h1>Elevator Configurator</h1>
     </div>
-    <div id="statusBadge" class="status-badge">Đang khởi tạo...</div>
+    <div class="top-actions">
+      <span id="cloudStatus" class="status">Firebase: local demo</span>
+      <button id="resetBtn" class="ghost" type="button">Reset</button>
+    </div>
   </header>
 
   <main class="app-shell">
-    <section class="viewer-card">
+    <section class="viewer-panel">
       <div id="viewer">
-        <div id="loading" class="loading-overlay">
+        <div id="loading" class="loading">
           <div class="spinner"></div>
-          <div id="loadingText">Đang khởi tạo 3D...</div>
+          <strong id="loadingText">Đang khởi tạo 3D…</strong>
+          <small id="loadingDetail">Đang chuẩn bị cabin</small>
         </div>
-        <div class="viewer-help">Kéo để xoay · Cuộn/pinch để zoom</div>
+        <div id="errorBox" class="error-box" hidden>
+          <strong>Không thể khởi tạo 3D</strong>
+          <span id="errorText"></span>
+          <button id="retryBtn" type="button">Thử lại</button>
+        </div>
+      </div>
+      <div class="viewer-hud">
+        <div>
+          <strong id="cabinTitle">GV-001 · Champagne Classic</strong>
+          <span id="modeTitle">3 Walls · Same Material</span>
+        </div>
+        <div class="hint">Kéo để xoay · pinch để zoom · 2 ngón để pan</div>
       </div>
     </section>
 
-    <section class="config-section">
-      <div class="section-title">01 · CABIN</div>
-      <div id="cabinOptions" class="option-grid"></div>
-    </section>
-
-    <section class="config-section">
-      <div class="section-title">02 · 3 WALLS</div>
-
-      <div class="mode-grid">
-        <button class="mode-btn active" data-wall-mode="same">Đồng bộ</button>
-        <button class="mode-btn" data-wall-mode="independent">3 vách riêng</button>
-        <button class="mode-btn" data-wall-mode="pattern">Ăn mòn hoa văn</button>
+    <aside class="control-panel">
+      <div class="section">
+        <div class="section-head"><span>01</span><b>CABIN</b></div>
+        <div id="cabinChoices" class="choice-grid"></div>
       </div>
 
-      <div class="wall-summary-grid">
-        <div class="wall-summary"><span>Vách trái</span><strong id="leftSummary">I01</strong></div>
-        <div class="wall-summary"><span>Vách sau</span><strong id="backSummary">I01</strong></div>
-        <div class="wall-summary"><span>Vách phải</span><strong id="rightSummary">I01</strong></div>
+      <div class="section">
+        <div class="section-head"><span>02</span><b>3 WALLS</b></div>
+        <div class="segmented">
+          <button data-wall-mode="same" class="active" type="button">Đồng bộ</button>
+          <button data-wall-mode="independent" type="button">3 vách riêng</button>
+          <button data-wall-mode="pattern" type="button">Ăn mòn hoa văn</button>
+        </div>
+        <div id="wallZones" class="zone-grid"></div>
+        <div id="wallMaterials" class="swatches"></div>
       </div>
 
-      <div id="wallControls" class="wall-controls"></div>
-      <div id="wallMaterialOptions" class="option-grid material-grid"></div>
-    </section>
-
-    <section class="config-section">
-      <div class="section-title">03 · FLOOR</div>
-      <div id="floorOptions" class="option-grid material-grid"></div>
-    </section>
-
-    <section class="config-section">
-      <div class="section-title">04 · CEILING</div>
-      <div id="ceilingOptions" class="option-grid material-grid"></div>
-    </section>
-
-    <section class="config-section">
-      <div class="section-title">05 · DOOR</div>
-      <div id="doorOptions" class="option-grid material-grid"></div>
-    </section>
-
-    <section class="config-section">
-      <div class="section-title">06 · HANDRAIL</div>
-      <div id="handrailOptions" class="option-grid material-grid"></div>
-    </section>
-
-    <section class="config-section">
-      <div class="section-title">07 · COP</div>
-      <div id="copOptions" class="option-grid material-grid"></div>
-    </section>
-
-    <section class="config-section">
-      <div class="section-title">08 · LIGHTING</div>
-      <div id="lightingOptions" class="option-grid material-grid"></div>
-    </section>
-
-    <section class="config-section summary-section">
-      <div class="section-title">CONFIGURATION</div>
-      <pre id="configSummary"></pre>
-      <div class="action-row">
-        <button id="resetBtn" class="secondary-btn">Khôi phục mặc định</button>
-        <button id="saveBtn" class="primary-btn">Lưu cấu hình</button>
+      <div class="section">
+        <div class="section-head"><span>03</span><b>FLOOR</b></div>
+        <div id="floorChoices" class="cards"></div>
       </div>
-      <div id="saveStatus" class="save-status"></div>
-    </section>
+
+      <div class="section">
+        <div class="section-head"><span>04</span><b>CEILING</b></div>
+        <div id="ceilingChoices" class="cards"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><span>05</span><b>DOOR</b></div>
+        <div id="doorChoices" class="cards"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><span>06</span><b>HANDRAIL</b></div>
+        <div id="handrailChoices" class="cards"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><span>07</span><b>COP</b></div>
+        <div id="copChoices" class="cards"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><span>08</span><b>LIGHTING</b></div>
+        <div id="lightingChoices" class="cards"></div>
+      </div>
+
+      <div class="section summary">
+        <div class="section-head"><span>09</span><b>CONFIGURATION</b></div>
+        <pre id="configPreview"></pre>
+      </div>
+    </aside>
   </main>
 
   <script type="module" src="./app.js"></script>
