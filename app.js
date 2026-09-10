@@ -381,9 +381,99 @@ function bindControls() {
   if (share) share.onclick = () => toast("Demo: chia sẻ mẫu");
 }
 
-renderCabins();
+
+function renderCabinSection() {
+  const panel = document.querySelector(".left-panel");
+  if (!panel) return;
+
+  panel.innerHTML = `
+    <div class="panel cabin-panel">
+      <div class="panel-heading"><strong>Chọn kiểu cabin</strong><span>⌄</span></div>
+      <div id="cabinStyleGrid" class="style-grid"></div>
+    </div>
+    <div class="panel info-panel">
+      <div class="info-title">Thông tin mẫu hiện tại</div>
+      <div id="currentInfo"></div>
+    </div>
+  `;
+
+  renderCabins();
+  updateSummary();
+}
+
+function renderFloorSection() {
+  const panel = document.querySelector(".left-panel");
+  if (!panel) return;
+
+  panel.innerHTML = `
+    <div class="panel cabin-panel">
+      <div class="panel-heading"><strong>Chọn mẫu sàn</strong><span>⌄</span></div>
+      <div id="floorStyleGrid" class="style-grid"></div>
+    </div>
+    <div class="panel info-panel">
+      <div class="info-title">Thông tin sàn hiện tại</div>
+      <div id="floorInfo"></div>
+    </div>
+  `;
+
+  const grid = $("floorStyleGrid");
+  catalog.floor.forEach(([code, name]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "choice-card" + (state.floor === code ? " active" : "");
+    button.innerHTML = `
+      <div class="choice-thumb" style="background:linear-gradient(135deg,#444,#aaa)"></div>
+      <div class="choice-name">${name}</div>
+      <div class="choice-code">${code}</div>
+    `;
+
+    button.onclick = () => {
+      state.floor = code;
+      updateMaterials();
+      renderFloorSection();
+      toast(`${code} · ${name}`);
+    };
+
+    grid.appendChild(button);
+  });
+
+  const current = catalog.floor.find(([code]) => code === state.floor);
+  $("floorInfo").innerHTML = `
+    <div><b>Mã sàn</b><span>${state.floor}</span></div>
+    <div><b>Mẫu</b><span>${current ? current[1] : ""}</span></div>
+  `;
+}
+
+function bindRailNavigation() {
+  document.querySelectorAll(".rail-item").forEach(button => {
+    button.addEventListener("click", () => {
+      const section = button.dataset.section;
+
+      if (section === "cabin") {
+        document.querySelectorAll(".rail-item").forEach(x => x.classList.remove("active"));
+        button.classList.add("active");
+        renderCabinSection();
+        return;
+      }
+
+      if (section === "floor") {
+        document.querySelectorAll(".rail-item").forEach(x => x.classList.remove("active"));
+        button.classList.add("active");
+        renderFloorSection();
+        return;
+      }
+
+      // Các mục còn lại chưa mở trong bước này — giữ nguyên baseline.
+      toast("Mục này sẽ được mở ở bước tiếp theo");
+    });
+  });
+}
+
+renderCabinSection();
 updateSummary();
 bindControls();
+bindRailNavigation();
+
 
 try {
   setup3D();
