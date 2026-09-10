@@ -1,122 +1,332 @@
-import * as THREE from "three";
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
 
 const DIM={w:1.4,d:1.2,h:2.4};
-const state={cabin:"GV-001",style:"Sang trọng",wall:"I01",floor:"S02",ceiling:"T01",door:"C01",handrail:"H01",cop:"P01",lighting:"L02",doorOpen:true,view:"front",angle:0};
+const ASSET="./assets/";
+const catalog={
+ cabins:[
+  {code:"GV-001",name:"Champagne Classic"},
+  {code:"GV-002",name:"Black Luxury"},
+  {code:"GV-003",name:"Silver Minimal"}
+ ],
+ walls:[
+  ["I01","Champagne Gold"],["I02","Mirror Silver"],["I03","Hairline Silver"],["I04","Dark Titanium"],
+  ["I05","Rose Gold"],["I06","Black Mirror"],["I07","Warm Bronze"],["I08","Pearl White"]
+ ],
+ floor:[["S01","Black Stone"],["S02","Grey Stone"],["S03","Light Marble"],["S04","Dark Marble"],["S05","Warm Granite"],["S06","Wood Tone"]],
+ ceiling:[["T01","Square Light"],["T02","Linear Light"],["T03","Gold Frame"],["T04","Black Frame"],["T05","White Minimal"],["T06","Star Light"]],
+ doors:[["C01","Champagne"],["C02","Silver"],["C03","Black"],["C04","Rose Gold"],["C05","Bronze"],["C06","Mirror"]],
+ handrail:[["H01","Round Silver"],["H02","Round Gold"],["H03","Black"],["H04","Wood"]],
+ cop:[["P01","Slim Silver"],["P02","Black Glass"],["P03","Gold Frame"],["P04","Full Height"]],
+ lighting:[["L01","Neutral"],["L02","Warm"],["L03","Cool"],["L04","Accent"]]
+};
 
-const cabins=[
-["GV-001","Tiêu chuẩn","Champagne"],["GV-002","Sang trọng","Silver"],["GV-003","Gia đình","Black"],
-["GV-004","Kính toàn cảnh","Glass"],["GV-005","Tải hàng","Bronze"],["GV-006","Theo yêu cầu","Gold"],
-["GV-007","Classic Wood","Wood"],["GV-008","Panoramic","Blue Glass"],["GV-009","Luxury Gold","Luxury"]
-];
-const infoRows=()=>[
-["Mã mẫu",state.cabin],["Kiểu cabin",cabins.find(x=>x[0]===state.cabin)?.[1]||"Sang trọng"],
-["Vách","Inox vàng hoa văn"],["Sàn","Đá marble đen viền vàng"],["Trần","LED hoa văn"],["Cửa","Inox vàng"],
-["Tay vịn","Không"],["Bảng điều khiển","Mẫu tiêu chuẩn"]
-];
+const state={
+ cabin:"GV-001",wallMode:"same",wallTarget:"back",
+ walls:{left:"I01",back:"I01",right:"I01"},
+ floor:"S01",ceiling:"T01",door:"C01",handrail:"H01",cop:"P01",lighting:"L01"
+};
 
-let scene,camera,renderer,root,doorGroup,wallGroup,ceiling,lights=[];
-const viewer=document.querySelector("#viewer");
+const $=id=>document.getElementById(id);
+const viewer=$("viewer"),loading=$("loading");
+let scene,camera,renderer,cabinRoot;
+let wallMeshes={},floorMesh,ceilingMesh,doorFrame,railMesh,copMesh,lightRig;
+const textureCache=new Map();
+let toastTimer;
 
-function mat(color,rough=.4,metal=.4){return new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});}
-function box(w,h,d,m){const x=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);x.castShadow=true;x.receiveShadow=true;return x;}
-function createScene(){
- scene=new THREE.Scene();scene.background=new THREE.Color(0xb8c1c5);
- camera=new THREE.PerspectiveCamera(39,1,.05,30);
- renderer=new THREE.WebGLRenderer({antialias:true});
- renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.enabled=true;
+function asset(category,code){return `${ASSET}${category}/${code}.png`;}
+
+function toast(text){
+ const el=$("toast"); if(!el)return;
+ el.textContent=text;el.classList.add("show");
+ clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove("show"),1600);
+}
+
+function makeTexture(path){
+ if(textureCache.has(path))return textureCache.get(path);
+ const t=new THREE.TextureLoader().load(path,
+   ()=>{},
+   undefined,
+   ()=>console.warn("Texture unavailable:",path)
+ );
+ t.colorSpace=THREE.SRGBColorSpace;
+ t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
+ textureCache.set(path,t);
+ return t;
+}
+
+function texturedMat(category,code,rough=.42,metal=.65){
+ return new THREE.MeshStandardMaterial({
+  map:makeTexture(asset(category,code)),
+  color:0xffffff,roughness:rough,metalness:metal
+ });
+}
+function mat(color,rough=.4,metal=.2){
+ return new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});
+}
+function box(w,h,d,m){
+ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
+ o.castShadow=true;o.receiveShadow=true;return o;
+}
+
+function createCabin(){
+ cabinRoot=new THREE.Group();scene.add(cabinRoot);
+
+ floorMesh=box(DIM.w,.045,DIM.d,texturedMat("floor",state.floor,.62,.08));
+ floorMesh.position.y=.0225;cabinRoot.add(floorMesh);
+
+ const wt=.035;
+ wallMeshes.left=box(wt,DIM.h,DIM.d,texturedMat("walls",state.walls.left));
+ wallMeshes.left.position.set(-DIM.w/2+wt/2,DIM.h/2,0);cabinRoot.add(wallMeshes.left);
+
+ wallMeshes.back=box(DIM.w,DIM.h,wt,texturedMat("walls",state.walls.back));
+ wallMeshes.back.position.set(0,DIM.h/2,DIM.d/2-wt/2);cabinRoot.add(wallMeshes.back);
+
+ wallMeshes.right=box(wt,DIM.h,DIM.d,texturedMat("walls",state.walls.right));
+ wallMeshes.right.position.set(DIM.w/2-wt/2,DIM.h/2,0);cabinRoot.add(wallMeshes.right);
+
+ ceilingMesh=box(DIM.w-.10,.06,DIM.d-.10,texturedMat("ceiling",state.ceiling,.55,.15));
+ ceilingMesh.position.y=DIM.h-.055;cabinRoot.add(ceilingMesh);
+
+ // Open front frame only — no door leaves in the preview.
+ updateDoorFrame();
+ railMesh=createHandrail();cabinRoot.add(railMesh);
+ copMesh=createCOP();cabinRoot.add(copMesh);
+
+ lightRig=new THREE.Group();cabinRoot.add(lightRig);
+ updateLighting();
+}
+
+function updateDoorFrame(){
+ if(doorFrame)cabinRoot.remove(doorFrame);
+ const colors={C01:0xc9b18b,C02:0xbec3c8,C03:0x202124,C04:0xc78e83,C05:0x9c7751,C06:0xbec3c8};
+ const m=mat(colors[state.door]||0xbec3c8,.27,.78),g=new THREE.Group(),t=.038;
+ [-DIM.w/2+t/2,DIM.w/2-t/2].forEach(x=>{
+  const p=box(t,DIM.h,.05,m);p.position.set(x,DIM.h/2,-DIM.d/2-.07);g.add(p);
+ });
+ const h=box(DIM.w,t,.05,m);h.position.set(0,DIM.h-t/2,-DIM.d/2-.07);g.add(h);
+ doorFrame=g;cabinRoot.add(g);
+}
+
+function createHandrail(){
+ const g=new THREE.Group();
+ const colors={H01:0xc8cbd0,H02:0xd5b77c,H03:0x202020,H04:0x7b5235};
+ const m=mat(colors[state.handrail]||0xc8cbd0,.22,.7);
+ const b=new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.92,24),m);
+ b.rotation.z=Math.PI/2;b.position.set(0,1.05,DIM.d/2-.075);g.add(b);
+ [-.46,.46].forEach(x=>{
+  const p=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.17,20),m);
+  p.position.set(x,.965,DIM.d/2-.075);g.add(p);
+ });
+ return g;
+}
+
+function createCOP(){
+ const g=new THREE.Group();
+ const colors={P01:0xd5d7da,P02:0x18191b,P03:0xd4b16f,P04:0x202226};
+ const m=mat(colors[state.cop]||0x202226,.28,.62);
+ const w=state.cop==="P04"?.16:.11,h=state.cop==="P04"?.88:.48;
+ const p=box(w,h,.035,m);p.position.set(DIM.w/2-.075,1.28,-.03);g.add(p);
+ const s=box(w*.64,h*.18,.012,mat(0x071014,.16,.35));
+ s.position.set(DIM.w/2-.075,1.39,-.055);g.add(s);
+ return g;
+}
+
+function updateMaterials(){
+ ["left","back","right"].forEach(side=>{
+  wallMeshes[side].material=texturedMat("walls",state.walls[side]);
+ });
+ floorMesh.material=texturedMat("floor",state.floor,.62,.08);
+ ceilingMesh.material=texturedMat("ceiling",state.ceiling,.55,.15);
+ if(railMesh){cabinRoot.remove(railMesh);railMesh=createHandrail();cabinRoot.add(railMesh);}
+ if(copMesh){cabinRoot.remove(copMesh);copMesh=createCOP();cabinRoot.add(copMesh);}
+ updateDoorFrame();updateLighting();
+}
+
+function updateLighting(){
+ if(!lightRig)return;
+ while(lightRig.children.length)lightRig.remove(lightRig.children[0]);
+ const p={
+  L01:[0xffffff,1.45],L02:[0xffdfad,1.55],L03:[0xddeaff,1.5],L04:[0xf0d5ff,1.65]
+ }[state.lighting]||[0xffffff,1.45];
+
+ [[-.43,-.30],[.43,-.30],[-.43,.30],[.43,.30]].forEach(([x,z])=>{
+  const panel=box(.20,.012,.045,mat(p[0],.15,.05));
+  panel.position.set(x,2.29,z);lightRig.add(panel);
+  const l=new THREE.PointLight(p[0],p[1],1.0,2);
+  l.position.set(x,2.18,z);lightRig.add(l);
+ });
+}
+
+function setup3D(){
+ scene=new THREE.Scene();
+ scene.background=new THREE.Color(0xf1f3f4);
+
+ camera=new THREE.PerspectiveCamera(42,1,.05,30);
+
+ renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.75));
+ renderer.outputColorSpace=THREE.SRGBColorSpace;
+ renderer.shadowMap.enabled=true;
+ renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+ viewer.innerHTML="";
  viewer.appendChild(renderer.domElement);
 
- scene.add(new THREE.HemisphereLight(0xffffff,0x66727a,1.8));
- const key=new THREE.DirectionalLight(0xffffff,2.8);key.position.set(-2,4,-4);key.castShadow=true;scene.add(key);
- const fill=new THREE.DirectionalLight(0xffe2c0,1.1);fill.position.set(2,2,-3);scene.add(fill);
+ scene.add(new THREE.HemisphereLight(0xffffff,0xb7bec4,1.65));
 
- root=new THREE.Group();scene.add(root);
- buildCabin(); resize(); requestAnimationFrame(loop);
- window.addEventListener("resize",resize);
- document.querySelector("#loading").style.display="none";
-}
-function buildCabin(){
- while(root.children.length)root.remove(root.children[0]);
- const wall=mat(0xd3b07a,.27,.72), dark=mat(0x27282b,.38,.7), floorM=mat(0x28282a,.62,.12);
- const inner=mat(0xd7c09b,.32,.6);
+ const key=new THREE.DirectionalLight(0xffffff,2.15);
+ key.position.set(-2.5,4.5,-4.5);key.castShadow=true;
+ key.shadow.mapSize.set(1024,1024);scene.add(key);
 
- root.add(box(DIM.w,.045,DIM.d,floorM));root.children.at(-1).position.y=.0225;
- const left=box(.035,DIM.h,DIM.d,wall);left.position.set(-DIM.w/2+.0175,DIM.h/2,0);root.add(left);
- const back=box(DIM.w,DIM.h,.035,inner);back.position.set(0,DIM.h/2,DIM.d/2-.0175);root.add(back);
- const right=box(.035,DIM.h,DIM.d,wall);right.position.set(DIM.w/2-.0175,DIM.h/2,0);root.add(right);
- // decorative vertical panels
- for(const x of [-.62,.62]){
-   const deco=box(.16,1.75,.018,dark);deco.position.set(x,1.32,.57);root.add(deco);
-   const innerLine=box(.018,1.48,.012,mat(0xd9b86f,.3,.75));innerLine.position.set(x,1.32,.555);root.add(innerLine);
- }
- // ceiling frame and luminous panel
- const cf=box(DIM.w-.10,.055,DIM.d-.10,mat(0x6e4a1f,.3,.75));cf.position.y=2.355;root.add(cf);
- const lp=box(.75,.025,.48,mat(0xfff1d0,.12,.15));lp.position.y=2.39;root.add(lp);
- // lights
- for(const x of [-.46,.46])for(const z of [-.35,.35]){
-   const l=new THREE.PointLight(0xffdfad,1.8,.95,2);l.position.set(x,2.31,z);root.add(l);
-   const disk=box(.14,.012,.14,mat(0xfff1cf,.1,.1));disk.position.set(x,2.37,z);root.add(disk);
- }
- doorGroup=new THREE.Group();root.add(doorGroup);buildDoor();
- buildRail();buildCOP();
+ const fill=new THREE.DirectionalLight(0xdde6f0,1.05);
+ fill.position.set(3,2,-2);scene.add(fill);
+
+ createCabin();
+ applyCamera();
+
+ window.addEventListener("resize",applyCamera,{passive:true});
+ if(window.ResizeObserver)new ResizeObserver(applyCamera).observe(viewer);
+
+ loading.style.display="none";
+ animate();
 }
-function buildDoor(){
- while(doorGroup.children.length)doorGroup.remove(doorGroup.children[0]);
- const dm=mat(0xc8a76b,.25,.8), glass=mat(0x9a784c,.22,.65);
- if(state.doorOpen){
-   // door leaves parked at the sides, keeping the cabin view open
-   for(const x of [-.54,.54]){const p=box(.06,2.2,.028,dm);p.position.set(x,1.1,-.62);doorGroup.add(p)}
+
+function applyCamera(){
+ if(!renderer||!camera)return;
+ const r=viewer.getBoundingClientRect();
+ if(r.width<10||r.height<10)return;
+ renderer.setSize(r.width,r.height,false);
+ camera.aspect=r.width/r.height;
+
+ const portrait=r.height>r.width*1.10;
+ if(portrait){
+  camera.position.set(.34,1.38,-5.90);
+  camera.fov=44;
  }else{
-   for(const x of [-.33,.33]){const p=box(.325,2.2,.03,glass);p.position.set(x,1.1,-.62);doorGroup.add(p)}
+  camera.position.set(.46,1.40,-5.35);
+  camera.fov=40;
  }
+ camera.lookAt(0,1.10,.12);
+ camera.updateProjectionMatrix();
 }
-function buildRail(){
- const rmat=mat(0xc7a35f,.22,.8);const bar=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.82,20),rmat);bar.rotation.z=Math.PI/2;bar.position.set(0,1.05,.565);root.add(bar);
-}
-function buildCOP(){
- const p=box(.11,.52,.03,mat(0x191b1d,.25,.65));p.position.set(.61,1.25,-.015);root.add(p);
- const s=box(.075,.08,.012,mat(0x08131a,.12,.35));s.position.set(.61,1.38,-.035);root.add(s);
-}
-function resize(){
- const r=viewer.getBoundingClientRect();if(!r.width||!r.height)return;
- renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;
- const portrait=r.height>r.width*1.1;
- camera.position.set(state.angle*.85,1.34,portrait?-5.45:-5.05);
- camera.lookAt(0,1.12,.12);camera.updateProjectionMatrix();
-}
-function loop(){requestAnimationFrame(loop);if(renderer)renderer.render(scene,camera)}
 
-function renderCabinStyles(){
- const el=document.querySelector("#cabinStyleGrid");el.innerHTML="";
- [["Tiêu chuẩn","GV-001"],["Sang trọng","GV-002"],["Gia đình","GV-003"],["Kính toàn cảnh","GV-004"],["Tải hàng","GV-005"],["Theo yêu cầu","GV-006"]].forEach(([name,code],i)=>{
-   const b=document.createElement("button");b.className="style-card"+(state.style===name?" active":"");b.innerHTML=`<div class="style-thumb"></div><div class="style-name">${name}</div>`;
-   b.onclick=()=>{state.style=name;state.cabin=code;renderAll();toast(`Đã chọn ${name}`)};el.appendChild(b);
+function animate(){
+ requestAnimationFrame(animate);
+ if(renderer)renderer.render(scene,camera);
+}
+
+function renderCabins(){
+ const el=$("cabinChoices");if(!el)return;el.innerHTML="";
+ catalog.cabins.forEach(c=>{
+  const b=document.createElement("button");b.type="button";
+  b.className="choice-card"+(state.cabin===c.code?" active":"");
+  b.innerHTML=`<div class="choice-thumb"></div><div class="choice-name">${c.name}</div><div class="choice-code">${c.code}</div>`;
+  b.onclick=()=>{state.cabin=c.code;renderCabins();updateSummary();toast(c.code);};
+  el.appendChild(b);
  });
 }
-function renderCatalog(){
- const el=document.querySelector("#cabinCatalog");el.innerHTML="";
- cabins.forEach(([code,name])=>{
-   const b=document.createElement("button");b.className="catalog-card"+(state.cabin===code?" active":"");
-   b.innerHTML=`<div class="catalog-thumb"></div><div class="catalog-name">${code}</div>`;
-   b.onclick=()=>{state.cabin=code;renderCatalog();renderInfo();toast(`Đã chọn ${code}`)};el.appendChild(b);
+
+function renderWalls(){
+ document.querySelectorAll("[data-wall-mode]").forEach(b=>b.classList.toggle("active",b.dataset.wallMode===state.wallMode));
+ const zones=$("wallZones");if(zones){
+  zones.innerHTML="";
+  [["left","Vách trái"],["back","Vách sau"],["right","Vách phải"]].forEach(([side,label])=>{
+   const b=document.createElement("button");b.type="button";
+   b.className="wall-zone"+((state.wallMode==="same"||state.wallTarget===side)?" active":"");
+   b.textContent=label;b.onclick=()=>{if(state.wallMode!=="same"){state.wallTarget=side;renderWalls();}};
+   zones.appendChild(b);
+  });
+ }
+ const el=$("wallMaterials");if(!el)return;el.innerHTML="";
+ catalog.walls.forEach(([code,name])=>{
+  const b=document.createElement("button");b.type="button";
+  const selected=state.wallMode==="same"?state.walls.back===code:state.walls[state.wallTarget]===code;
+  b.className="swatch"+(selected?" active":"");
+  b.innerHTML=`<div class="swatch-img"><img src="${asset("walls",code)}" alt=""></div><div class="swatch-label">${code} · ${name}</div>`;
+  b.onclick=()=>{
+   if(state.wallMode==="same")state.walls={left:code,back:code,right:code};
+   else state.walls[state.wallTarget]=code;
+   updateMaterials();renderWalls();updateSummary();
+  };
+  el.appendChild(b);
  });
 }
-function renderInfo(){
- document.querySelector("#currentInfo").innerHTML=infoRows().map(([a,b])=>`<div class="info-row"><b>${a}</b><span>${b}</span></div>`).join("");
+
+function renderGrid(id,items,category,key){
+ const el=$(id);if(!el)return;el.innerHTML="";
+ items.forEach(([code,name])=>{
+  const b=document.createElement("button");b.type="button";
+  b.className="mini-card"+(state[key]===code?" active":"");
+  b.innerHTML=`<div class="mini-thumb"><img src="${asset(category,code)}" alt=""></div><div class="mini-label">${code} · ${name}</div>`;
+  b.onclick=()=>{state[key]=code;updateMaterials();renderUI();};
+  el.appendChild(b);
+ });
 }
-function renderAll(){renderCabinStyles();renderCatalog();renderInfo();buildCabin();resize();}
-function toast(s){const e=document.querySelector("#toast");e.textContent=s;e.classList.add("show");clearTimeout(window._t);window._t=setTimeout(()=>e.classList.remove("show"),1600)}
 
-document.querySelectorAll(".rail-item").forEach(b=>b.onclick=()=>{document.querySelectorAll(".rail-item").forEach(x=>x.classList.remove("active"));b.classList.add("active");toast(`Mục ${b.querySelector("span").textContent}`)});
-document.querySelectorAll(".filter").forEach(b=>b.onclick=()=>{document.querySelectorAll(".filter").forEach(x=>x.classList.remove("active"));b.classList.add("active")});
-document.querySelector("#doorToggle").onclick=()=>{state.doorOpen=!state.doorOpen;document.querySelector("#doorText").textContent=state.doorOpen?"Mở cửa":"Đóng cửa";buildDoor()};
-document.querySelector("#rotateLeft").onclick=()=>{state.angle=Math.max(-.35,state.angle-.12);resize()};
-document.querySelector("#rotateRight").onclick=()=>{state.angle=Math.min(.35,state.angle+.12);resize()};
-document.querySelectorAll(".view-card").forEach(b=>b.onclick=()=>{document.querySelectorAll(".view-card").forEach(x=>x.classList.remove("active"));b.classList.add("active");state.view=b.dataset.view;toast(`Góc ${b.textContent.trim()}`)});
-document.querySelector("#saveBtn").onclick=()=>toast("Đã lưu cấu hình mẫu");
-document.querySelector("#quoteBtn").onclick=()=>toast("Đã tạo yêu cầu báo giá");
-document.querySelector("#imageBtn").onclick=()=>toast("Demo: chức năng tải ảnh sẵn sàng");
-document.querySelector("#shareBtn").onclick=()=>toast("Demo: chia sẻ mẫu sẵn sàng");
+function updateSummary(){
+ const c=catalog.cabins.find(x=>x.code===state.cabin);
+ $("configPreview").textContent=state.cabin;
+ $("cabinTitle").textContent=`${state.cabin} · ${c?c.name:"Cabin"}`;
+ $("modeTitle").textContent=`3 Walls · ${{same:"Same Material",independent:"Independent",pattern:"Pattern"}[state.wallMode]}`;
+ $("configSummary").innerHTML=
+  `Walls: ${state.walls.left} / ${state.walls.back} / ${state.walls.right}<br>`+
+  `Floor ${state.floor} · Ceiling ${state.ceiling} · Door ${state.door}<br>`+
+  `Handrail ${state.handrail} · COP ${state.cop} · Light ${state.lighting}`;
+}
 
-renderAll();
-try{createScene()}catch(e){console.error(e);document.querySelector("#loading").textContent="Không thể khởi tạo 3D";}
+function renderUI(){
+ renderCabins();renderWalls();
+ renderGrid("floorChoices",catalog.floor,"floor","floor");
+ renderGrid("ceilingChoices",catalog.ceiling,"ceiling","ceiling");
+ renderGrid("doorChoices",catalog.doors,"doors","door");
+ renderGrid("handrailChoices",catalog.handrail,"handrail","handrail");
+ renderGrid("copChoices",catalog.cop,"cop","cop");
+ renderGrid("lightingChoices",catalog.lighting,"lighting","lighting");
+ updateSummary();
+}
+
+document.querySelectorAll("[data-wall-mode]").forEach(b=>b.onclick=()=>{
+ state.wallMode=b.dataset.wallMode;
+ if(state.wallMode==="same"){
+  state.walls.left=state.walls.back;state.walls.right=state.walls.back;
+ }
+ renderWalls();updateSummary();
+});
+$("resetBtn").onclick=()=>{
+ Object.assign(state,{
+  cabin:"GV-001",wallMode:"same",wallTarget:"back",
+  walls:{left:"I01",back:"I01",right:"I01"},
+  floor:"S01",ceiling:"T01",door:"C01",handrail:"H01",cop:"P01",lighting:"L01"
+ });
+ renderUI();updateMaterials();toast("Đã đặt lại");
+};
+$("quoteBtn").onclick=()=>toast("Demo: yêu cầu báo giá sẵn sàng");
+
+renderUI();
+
+try{
+ setup3D();
+}catch(err){
+ console.error("3D initialization error:",err);
+ loading.textContent="Lỗi khởi tạo 3D";
+ loading.style.display="block";
+ $("cloudStatus").textContent="3D error · xem Console";
+}
+
+(async()=>{
+ try{
+  const {initializeApp}=await import("https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js");
+  const {getFirestore}=await import("https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js");
+  initializeApp({
+   apiKey:"AIzaSyATAShAE4dBaU5fPAE1l_5sTe7WaUPumDA",
+   authDomain:"elevator-configurator-ac760.firebaseapp.com",
+   projectId:"elevator-configurator-ac760",
+   storageBucket:"elevator-configurator-ac760.firebasestorage.app",
+   messagingSenderId:"509625508976",
+   appId:"1:509625508976:web:cda6aecd0d06f069f040b5"
+  });
+  getFirestore();
+  $("cloudStatus").textContent="Firebase connected · demo catalog";
+ }catch(e){
+  $("cloudStatus").textContent="Local catalog · Firebase optional";
+ }
+})();
