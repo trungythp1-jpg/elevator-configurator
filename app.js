@@ -1,3 +1,9 @@
+/* ELEVATOR CONFIGURATOR V7
+   Fixed cabin preview: 1400W x 1200D x 2400H mm
+   No rotate / no zoom / no pan.
+   3D startup is independent from Firebase and optional UI events.
+*/
+
 import * as THREE from "three";
 
 const LOCAL_MANIFEST_FALLBACK = {
@@ -396,6 +402,8 @@ function updateConfig() {
 }
 
 function setupEvents() {
+  // V7: event wiring is optional and must never block 3D startup.
+
   document.querySelectorAll("[data-wall-mode]").forEach(button => {
     button.addEventListener("click", () => {
       state.wallMode = button.dataset.wallMode;
@@ -427,7 +435,6 @@ function setupEvents() {
   });
 
   $("#retryBtn").addEventListener("click", () => location.reload());
-  $("#cameraResetBtn").addEventListener("click", resetCamera);
 }
 
 async function setupFirebaseInBackground() {
