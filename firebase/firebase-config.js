@@ -1,6 +1,6 @@
-// Firebase configuration for Elevator Configurator
-// This is a browser-side Firebase config. Security is enforced by
-// Firebase Authentication and Firestore Security Rules, not by hiding this file.
+// Firebase Web SDK configuration.
+// This is client-side configuration, not a private service-account key.
+// Keep Firestore/Auth security in Firebase Rules.
 
 export const firebaseConfig = {
   apiKey: "AIzaSyATAShAE4dBaU5fPAE1l_5sTe7WaUPumDA",
