@@ -386,214 +386,210 @@ function createCabin(){
 
 function createCeiling(){
   /*
-    CEILING V8 — showroom style
-    - Recessed multi-layer ceiling
-    - Matte ivory/white architectural cassette
-    - Dark shadow-gap around the recess
-    - Central decorative CNC-inspired floral/geometric panel
-    - Perimeter warm LED halo
-    - Four compact downlights
-    - No exposed stainless-steel ceiling sheet
+    ELEVATOR CONFIGURATOR — V9 SHOWROOM CEILING
+
+    Realistic architectural composition:
+    1. outer ivory ceiling cassette
+    2. recessed shadow tray
+    3. central decorative CNC panel
+    4. four recessed downlights
+    5. warm perimeter LED reveal
+
+    Everything is horizontal (XZ plane) so the ceiling reads correctly
+    from the showroom camera.
   */
 
+  const group=new THREE.Group();
+  group.name="V9_Showroom_Ceiling";
+
   const ivory=new THREE.MeshStandardMaterial({
-    color:0xf5f2ea,
-    roughness:.70,
-    metalness:0
+    color:0xf2f0eb,
+    roughness:.66,
+    metalness:.03
   });
 
-  const ivory2=new THREE.MeshStandardMaterial({
-    color:0xe7e3da,
-    roughness:.62,
-    metalness:.05
+  const ivoryEdge=new THREE.MeshStandardMaterial({
+    color:0xd8d5ce,
+    roughness:.58,
+    metalness:.10
   });
 
   const shadow=new THREE.MeshStandardMaterial({
-    color:0x343638,
-    roughness:.48,
-    metalness:.18
+    color:0x34383a,
+    roughness:.42,
+    metalness:.22
   });
 
-  const panelMat=new THREE.MeshStandardMaterial({
-    color:0x8b8880,
-    roughness:.48,
-    metalness:.28
+  const cnc=new THREE.MeshStandardMaterial({
+    color:0xe1ded6,
+    roughness:.52,
+    metalness:.12
   });
 
-  const glowMat=new THREE.MeshStandardMaterial({
-    color:0xfff8e8,
-    emissive:0xffe7ae,
-    emissiveIntensity:3.2,
-    roughness:.25,
+  const darkCnc=new THREE.MeshStandardMaterial({
+    color:0x8a8984,
+    roughness:.48,
+    metalness:.22
+  });
+
+  const glow=new THREE.MeshStandardMaterial({
+    color:0xfffdf5,
+    emissive:0xffe6a8,
+    emissiveIntensity:2.4,
+    roughness:.20,
     metalness:0
   });
 
-  const group=new THREE.Group();
+  const y=DIM.h-.045;
 
-  /* Outer ceiling cassette */
-  const outer=box(DIM.w-.08,.040,DIM.d-.08,ivory);
-  outer.position.set(0,DIM.h-.055,0);
+  // Outer architectural cassette.
+  const outer=box(DIM.w-.06,.045,DIM.d-.06,ivory);
+  outer.position.set(0,y,0);
   group.add(outer);
 
-  /* Deep shadow recess */
-  const recess=box(DIM.w-.22,.020,DIM.d-.22,shadow);
-  recess.position.set(0,DIM.h-.028,0);
-  group.add(recess);
-
-  /* Inner ivory ceiling field */
-  const inner=box(DIM.w-.27,.024,DIM.d-.27,ivory2);
-  inner.position.set(0,DIM.h-.010,0);
-  group.add(inner);
-
-  /* Perimeter recessed LED halo */
-  const halo=new THREE.Group();
-  const ledW=.018;
-  const ledY=DIM.h+.002;
-  const hx=DIM.w-.31;
-  const hz=DIM.d-.31;
-
+  // Slim perimeter edge.
+  const edgeT=.032;
   [
-    [hx,ledW,.022,0,ledY,-hz/2],
-    [hx,ledW,.022,0,ledY,hz/2],
-    [.022,ledW,hz,-hx/2,ledY,0],
-    [.022,ledW,hz,hx/2,ledY,0]
-  ].forEach(([w,h,d,x,y,z])=>{
-    const strip=box(w,h,d,glowMat);
-    strip.position.set(x,y,z);
-    halo.add(strip);
+    [DIM.w-.08,edgeT,.035,0,y-.026,-DIM.d/2+.055],
+    [DIM.w-.08,edgeT,.035,0,y-.026,DIM.d/2-.055],
+    [.035,edgeT,DIM.d-.08,-DIM.w/2+.055,y-.026,0],
+    [.035,edgeT,DIM.d-.08,DIM.w/2-.055,y-.026,0]
+  ].forEach(([w,h,d,x,yy,z])=>{
+    const m=box(w,h,d,ivoryEdge);
+    m.position.set(x,yy,z);
+    group.add(m);
   });
 
-  /* Warm architectural wash */
-  const washFront=new THREE.RectAreaLight(0xfff1cf,2.0,DIM.w-.30,.055);
-  washFront.position.set(0,DIM.h-.005,-DIM.d/2+.16);
-  washFront.rotation.x=Math.PI;
-  halo.add(washFront);
+  // Recessed dark tray.
+  const trayW=DIM.w-.23;
+  const trayD=DIM.d-.23;
+  const tray=box(trayW,.018,trayD,shadow);
+  tray.position.set(0,y-.055,0);
+  group.add(tray);
 
-  const washRear=new THREE.RectAreaLight(0xfff1cf,1.3,DIM.w-.30,.055);
-  washRear.position.set(0,DIM.h-.005,DIM.d/2-.16);
-  washRear.rotation.x=Math.PI;
-  halo.add(washRear);
+  // White inner field.
+  const field=box(trayW-.075,.022,trayD-.075,ivory);
+  field.position.set(0,y-.043,0);
+  group.add(field);
 
-  const washLeft=new THREE.RectAreaLight(0xfff1cf,1.0,.055,DIM.d-.30);
-  washLeft.position.set(-DIM.w/2+.16,DIM.h-.005,0);
-  washLeft.rotation.z=Math.PI/2;
-  halo.add(washLeft);
+  // Warm LED reveal around the inner field.
+  const ledY=y-.030;
+  const lx=trayW-.075;
+  const lz=trayD-.075;
+  [
+    [lx,.018,.020,0,ledY,-lz/2],
+    [lx,.018,.020,0,ledY,lz/2],
+    [.020,.018,lz,-lx/2,ledY,0],
+    [.020,.018,lz,lx/2,ledY,0]
+  ].forEach(([w,h,d,x,yy,z])=>{
+    const m=box(w,h,d,glow);
+    m.position.set(x,yy,z);
+    group.add(m);
+  });
 
-  const washRight=new THREE.RectAreaLight(0xfff1cf,1.0,.055,DIM.d-.30);
-  washRight.position.set(DIM.w/2-.16,DIM.h-.005,0);
-  washRight.rotation.z=-Math.PI/2;
-  halo.add(washRight);
+  // Central CNC panel.
+  const panelW=DIM.w-.46;
+  const panelD=DIM.d-.48;
 
-  group.add(halo);
-
-  /* Central decorative panel */
-  const panelW=DIM.w-.43;
-  const panelD=DIM.d-.43;
-  const panel=box(panelW,.016,panelD,panelMat);
-  panel.position.set(0,DIM.h+.008,0);
+  const panel=box(panelW,.014,panelD,cnc);
+  panel.position.set(0,y-.060,0);
   group.add(panel);
 
-  /* Inner bright border around CNC panel */
-  const bt=.010;
-  const bw=panelW-.055;
-  const bd=panelD-.055;
+  // Thin decorative border.
+  const bw=panelW-.045;
+  const bd=panelD-.045;
+  const bt=.008;
   [
-    [bw,bt,.014,0,DIM.h+.019,-bd/2],
-    [bw,bt,.014,0,DIM.h+.019,bd/2],
-    [.014,bt,bd,-bw/2,DIM.h+.019,0],
-    [.014,bt,bd,bw/2,DIM.h+.019,0]
-  ].forEach(([w,h,d,x,y,z])=>{
-    const b=box(w,h,d,ivory);
-    b.position.set(x,y,z);
-    group.add(b);
+    [bw,bt,.012,0,y-.050,-bd/2],
+    [bw,bt,.012,0,y-.050,bd/2],
+    [.012,bt,bd,-bw/2,y-.050,0],
+    [.012,bt,bd,bw/2,y-.050,0]
+  ].forEach(([w,h,d,x,yy,z])=>{
+    const m=box(w,h,d,ivory);
+    m.position.set(x,yy,z);
+    group.add(m);
   });
 
-  /* CNC-inspired floral/geometric motif.
-     Built from thin luminous rings and petals rather than a flat white block,
-     so it reads as a decorative perforated panel. */
+  // CNC rosette — all pieces lie in the ceiling's XZ plane.
   const motif=new THREE.Group();
-  const centerMat=glowMat;
+  const motifY=y-.041;
 
-  const center=new THREE.Mesh(
-    new THREE.CylinderGeometry(.065,.065,.008,32),
-    centerMat
-  );
-  center.rotation.x=Math.PI/2;
-  center.position.set(0,DIM.h+.026,0);
-  motif.add(center);
+  function addRing(radius,tube){
+    const ring=new THREE.Mesh(
+      new THREE.TorusGeometry(radius,tube,10,48),
+      darkCnc
+    );
+    ring.rotation.x=Math.PI/2;
+    ring.position.set(0,motifY,0);
+    motif.add(ring);
+  }
 
+  addRing(.155,.010);
+  addRing(.105,.008);
+  addRing(.052,.006);
+
+  // Eight overlapping petals.
   for(let i=0;i<8;i++){
     const a=i*Math.PI/4;
     const petal=new THREE.Mesh(
-      new THREE.TorusGeometry(.105,.018,.8,24,Math.PI*1.35),
-      centerMat
+      new THREE.TorusGeometry(.082,.010,10,32,Math.PI*1.55),
+      darkCnc
     );
-    petal.rotation.set(0,0,a);
-    petal.position.set(Math.cos(a)*.075,DIM.h+.026,Math.sin(a)*.075);
+    petal.rotation.x=Math.PI/2;
+    petal.rotation.z=a;
+    petal.position.set(
+      Math.cos(a)*.062,
+      motifY,
+      Math.sin(a)*.062
+    );
     motif.add(petal);
   }
 
-  for(let i=0;i<4;i++){
-    const a=i*Math.PI/2+Math.PI/4;
-    const petal=new THREE.Mesh(
-      new THREE.TorusGeometry(.175,.014,.8,28,Math.PI*1.25),
-      centerMat
-    );
-    petal.rotation.set(0,0,a);
-    petal.position.set(Math.cos(a)*.055,DIM.h+.025,Math.sin(a)*.055);
-    motif.add(petal);
-  }
-
-  /* Small CNC perforation clusters */
-  const dotGeo=new THREE.CylinderGeometry(.010,.010,.008,16);
+  // Four small perforation clusters.
+  const dotGeo=new THREE.CylinderGeometry(.009,.009,.010,16);
   for(const sx of [-1,1]){
     for(const sz of [-1,1]){
       for(let r=0;r<2;r++){
         for(let c=0;c<3;c++){
-          const dot=new THREE.Mesh(dotGeo,centerMat);
-          dot.rotation.x=Math.PI/2;
+          const dot=new THREE.Mesh(dotGeo,glow);
           dot.position.set(
-            sx*(.255+c*.030),
-            DIM.h+.025,
-            sz*(.205+r*.032)
+            sx*(.22+c*.027),
+            motifY-.002,
+            sz*(.17+r*.030)
           );
           motif.add(dot);
         }
       }
     }
   }
-
   group.add(motif);
 
-  /* Four discreet downlights */
-  const lightPositions=[
-    [-.45,-.31], [.45,-.31], [-.45,.31], [.45,.31]
-  ];
-
-  for(const [x,z] of lightPositions){
-    const housing=new THREE.Mesh(
-      new THREE.CylinderGeometry(.045,.045,.012,32),
-      ivory
+  // Four recessed downlights, physically horizontal.
+  [
+    [-.43,-.31],[.43,-.31],[-.43,.31],[.43,.31]
+  ].forEach(([x,z])=>{
+    const bezel=new THREE.Mesh(
+      new THREE.CylinderGeometry(.046,.046,.014,32),
+      ivoryEdge
     );
-    housing.rotation.x=Math.PI/2;
-    housing.position.set(x,DIM.h+.021,z);
-    group.add(housing);
+    bezel.position.set(x,motifY-.004,z);
+    group.add(bezel);
 
     const lamp=new THREE.Mesh(
-      new THREE.CircleGeometry(.026,32),
-      glowMat
+      new THREE.CylinderGeometry(.027,.027,.010,32),
+      glow
     );
-    lamp.rotation.x=-Math.PI/2;
-    lamp.position.set(x,DIM.h+.028,z);
+    lamp.position.set(x,motifY-.013,z);
     group.add(lamp);
 
-    const point=new THREE.PointLight(0xffefc9,1.0,.95,2);
-    point.position.set(x,DIM.h-.05,z);
-    group.add(point);
-  }
+    const light=new THREE.PointLight(0xffe8bd,.72,.95,2);
+    light.position.set(x,DIM.h-.14,z);
+    group.add(light);
+  });
 
   cabinRoot.add(group);
 }
+
 /* ---------- Rendering ---------- */
 
 function setup3D(){
@@ -652,18 +648,17 @@ function applyCamera(){
   camera.aspect=r.width/r.height;
 
   /*
-    The cabin is intentionally viewed from slightly in front of the
-    open doorway. Negative Z is the viewer side.
+    V9 SHOWROOM VIEW
+    Camera is outside the open doorway, slightly above floor level,
+    looking gently upward. This makes the recessed ceiling a visible
+    architectural element while retaining the whole floor.
   */
   const presets={
-    /* Main showroom view:
-       centered on the doorway, slightly elevated, with enough perspective
-       to show BOTH the recessed ceiling and the complete floor. */
-    front:{pos:[0,1.42,-3.55],look:[0,1.28,.25],fov:40},
-    left:{pos:[-2.45,1.43,-3.10],look:[0,1.25,.20],fov:42},
-    right:{pos:[2.45,1.43,-3.10],look:[0,1.25,.20],fov:42},
-    ceiling:{pos:[0,3.20,-2.70],look:[0,1.78,.08],fov:43},
-    floor:{pos:[0,.78,-2.75],look:[0,.82,.30],fov:43}
+    front:{pos:[0,1.58,-4.05],look:[0,1.64,.18],fov:43},
+    left:{pos:[-2.55,1.60,-3.65],look:[0,1.55,.18],fov:44},
+    right:{pos:[2.55,1.60,-3.65],look:[0,1.55,.18],fov:44},
+    ceiling:{pos:[0,2.55,-3.05],look:[0,2.05,.10],fov:45},
+    floor:{pos:[0,.95,-3.15],look:[0,.92,.28],fov:45}
   };
 
   const p=presets[state.view]||presets.front;
@@ -901,3 +896,15 @@ function init(){
 }
 
 init();
+
+/* V9 — keep the showroom cabin clean: no COP and no handrail. */
+function cleanShowroomAccessories(){
+  if(!cabinRoot) return;
+  cabinRoot.traverse(o=>{
+    const n=(o.name||"").toLowerCase();
+    if(n.includes("handrail") || n.includes("cop") || n.includes("controlpanel")){
+      o.visible=false;
+    }
+  });
+}
+requestAnimationFrame(cleanShowroomAccessories);
