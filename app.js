@@ -305,38 +305,43 @@ function createCabin(){
   wallMeshes.right.position.set(DIM.w/2-.019,DIM.h/2,0);
   cabinRoot.add(wallMeshes.right);
 
-  /* Rear wall — full-height continuous backing first.
-     This prevents any white/background gap from appearing behind
-     the decorative panel divisions. */
+  /* REAR WALL — ONE SOLID SURFACE
+     The rear wall is intentionally a single continuous panel.
+     Do not create openings or bright vertical strips here.
+     A second very thin surface sits toward the camera so the
+     champagne material always covers the background completely. */
   const rear=new THREE.Group();
 
-  const rearBacking=box(DIM.w-.075,DIM.h-.075,.040,wall);
-  rearBacking.position.set(0,DIM.h/2,.0);
+  const rearBacking=box(DIM.w-.075,DIM.h-.075,.055,wall);
+  rearBacking.position.set(0,DIM.h/2,-.010);
   rear.add(rearBacking);
 
-  /* Three visual panels on the rear wall.
-     Only subtle dark seams are used between panels — no bright
-     vertical white strips. */
-  const panelGap=.010;
-  const rearW=(DIM.w-.075-panelGap*2)/3;
+  /* Very subtle three-panel construction.
+     These are inset overlays, not gaps. */
+  const panelGap=.004;
+  const rearW=(DIM.w-.095-panelGap*2)/3;
 
   for(let i=0;i<3;i++){
-    const p=box(rearW,DIM.h-.115,.012,wall);
-    p.position.set((i-1)*(rearW+panelGap),DIM.h/2-.005,-.026);
-    rear.add(p);
+    const panel=box(rearW,DIM.h-.105,.010,wall);
+    panel.position.set(
+      (i-1)*(rearW+panelGap),
+      DIM.h/2-.005,
+      -.043
+    );
+    rear.add(panel);
   }
 
-  /* Subtle panel seams */
+  /* Dark micro-joints instead of white lines */
   const seamMat=darkTrimMaterial();
   for(const x of [-rearW/2-panelGap/2,rearW/2+panelGap/2]){
-    const seam=box(.006,DIM.h-.18,.010,seamMat);
-    seam.position.set(x,DIM.h/2-.01,-.036);
+    const seam=box(.003,DIM.h-.15,.006,seamMat);
+    seam.position.set(x,DIM.h/2-.01,-.050);
     rear.add(seam);
   }
 
-  /* Lower kick panel */
-  const kick=box(DIM.w-.075,.105,.050,trim);
-  kick.position.set(0,.085,-.012);
+  /* Low kick plate */
+  const kick=box(DIM.w-.075,.095,.045,trim);
+  kick.position.set(0,.078,-.045);
   rear.add(kick);
 
   rear.position.set(0,0,DIM.d/2-.018);
@@ -358,7 +363,7 @@ function createCabin(){
   /* Front architectural frame — narrow and realistic */
   frontFrame=new THREE.Group();
   const frameT=.045;
-  const frameMat=dark;
+  const frameMat=trim;
 
   [-DIM.w/2-frameT/2,DIM.w/2+frameT/2].forEach(x=>{
     const v=box(frameT,DIM.h+.04,.08,frameMat);
