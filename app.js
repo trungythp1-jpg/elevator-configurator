@@ -1,5 +1,3 @@
-===== app.js =====
-
 import * as THREE from "three";
 
 const DIM={w:1.4,d:1.2,h:2.4};
