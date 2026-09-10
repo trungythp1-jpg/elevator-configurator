@@ -1,5 +1,6 @@
 /* ELEVATOR CONFIGURATOR V7
    Fixed cabin preview: 1400W x 1200D x 2400H mm
+V8 framing: camera farther back to show full floor and ceiling
    No rotate / no zoom / no pan.
    3D startup is independent from Firebase and optional UI events.
 */
@@ -151,9 +152,10 @@ function initThree() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf0f3f2);
 
-  camera = new THREE.PerspectiveCamera(38, 1, 0.05, 100);
-  camera.position.set(0, 1.25, -3.35);
-  camera.lookAt(0, 1.18, 0.48);
+  camera = new THREE.PerspectiveCamera(42, 1, 0.05, 100);
+  // Fixed wider framing: move the camera farther back so the full floor and ceiling stay visible.
+  camera.position.set(0, 1.28, -4.30);
+  camera.lookAt(0, 1.18, 0.55);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -279,8 +281,8 @@ function applyLighting() {
 
 function resetCamera() {
   if (!camera) return;
-  camera.position.set(0, 1.25, -3.35);
-  camera.lookAt(0, 1.18, 0.48);
+  camera.position.set(0, 1.28, -4.30);
+  camera.lookAt(0, 1.18, 0.55);
 }
 
 function resize() {
