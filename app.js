@@ -444,30 +444,49 @@ function renderFloorSection() {
   `;
 }
 
-function bindRailNavigation() {
-  document.querySelectorAll(".rail-item").forEach(button => {
-    button.addEventListener("click", () => {
-      const section = button.dataset.section;
+function openSection(section, button) {
+  if (button) {
+    document.querySelectorAll(".rail-item").forEach(x => x.classList.remove("active"));
+    button.classList.add("active");
+  }
 
-      if (section === "cabin") {
-        document.querySelectorAll(".rail-item").forEach(x => x.classList.remove("active"));
-        button.classList.add("active");
-        renderCabinSection();
-        return;
-      }
+  if (section === "cabin") {
+    renderCabinSection();
+    return true;
+  }
 
-      if (section === "floor") {
-        document.querySelectorAll(".rail-item").forEach(x => x.classList.remove("active"));
-        button.classList.add("active");
-        renderFloorSection();
-        return;
-      }
+  if (section === "floor") {
+    renderFloorSection();
+    return true;
+  }
 
-      // Các mục còn lại chưa mở trong bước này — giữ nguyên baseline.
-      toast("Mục này sẽ được mở ở bước tiếp theo");
-    });
-  });
+  toast("Mục này sẽ được mở ở bước tiếp theo");
+  return true;
 }
+
+function bindRailNavigation() {
+  // Event delegation + capture: hoạt động ổn định trên Safari/iPad,
+  // kể cả khi panel phía dưới được thay thế bằng innerHTML.
+  const handleRail = event => {
+    const target = event.target.closest ? event.target.closest(".rail-item") : null;
+    if (!target) return;
+
+    if (event.type === "touchend") event.preventDefault();
+
+    const section = target.getAttribute("data-section");
+    if (!section) return;
+
+    openSection(section, target);
+  };
+
+  document.addEventListener("click", handleRail, true);
+  document.addEventListener("touchend", handleRail, {capture:true, passive:false});
+}
+
+window.__openFloor = () => {
+  const button = document.querySelector('.rail-item[data-section="floor"]');
+  if (button) openSection("floor", button);
+};
 
 renderCabinSection();
 updateSummary();
