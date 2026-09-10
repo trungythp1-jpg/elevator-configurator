@@ -11,3 +11,17 @@ body{overflow:hidden}.topbar{height:84px;background:linear-gradient(180deg,#f7fb
 #toast{position:fixed;bottom:20px;left:50%;transform:translate(-50%,20px);opacity:0;background:#102c3d;color:#fff;border-radius:8px;padding:9px 15px;font-size:12px;transition:.2s;z-index:20}.show{opacity:1!important;transform:translate(-50%,0)!important}
 @media(max-width:1250px){.workspace{grid-template-columns:56px 285px minmax(420px,1fr) 350px}.topbar{padding-left:5%}.catalog-grid{gap:7px}.catalog-thumb{height:86px}}
 @media(max-width:950px){body{overflow:auto}.topbar{height:72px;padding:0 12px}.logo-title{font-size:19px}.logo-sub{font-size:9px}.top-actions{display:none}.slogan{margin-left:auto;font-size:15px;min-width:auto}.workspace{height:auto;min-height:calc(100vh - 72px);display:flex;flex-direction:column;padding:0;background:#e1e7ea}.rail{height:62px;border-radius:0;display:grid;grid-template-columns:repeat(5,1fr);flex-direction:row;overflow:hidden}.rail-item{min-height:62px}.rail-item:nth-child(n+6){display:none}.viewer-column{order:1;padding:10px;height:58vh;min-height:430px}.left-panel{order:2;padding:10px}.right-panel{order:3;padding:10px}.viewer-wrap{width:100%}.view-strip{width:100%}.left-panel,.right-panel{gap:10px}.catalog-grid{grid-template-columns:repeat(3,1fr)}}
+
+/* ===== BASELINE V2 SYNC: choice cards ===== */
+.choice-card{border:0;background:#fff;text-align:center;cursor:pointer;color:var(--ink);padding:0;border-radius:8px;overflow:hidden}
+.choice-thumb{height:74px;border-radius:7px;background:linear-gradient(145deg,#e5eaed,#9da8ae);position:relative;overflow:hidden;box-shadow:inset 0 0 0 1px #e0e5e8}
+.choice-card.active .choice-thumb{box-shadow:inset 0 0 0 3px var(--green),0 0 0 1px #fff}
+.choice-thumb:before{content:"";position:absolute;left:18%;right:18%;top:7%;bottom:5%;border:4px solid rgba(255,255,255,.78);background:linear-gradient(90deg,rgba(255,255,255,.12),rgba(20,25,28,.18),rgba(255,255,255,.2))}
+.choice-thumb:after{content:"";position:absolute;left:30%;right:30%;top:20%;bottom:13%;border:2px solid rgba(255,255,255,.48);background:linear-gradient(180deg,rgba(50,55,58,.2),rgba(255,255,255,.25))}
+.choice-name{font-size:13px;font-weight:600;margin-top:6px}
+.choice-code{font-size:11px;color:#64737d;margin-top:2px}
+#currentInfo,#floorInfo{font-size:11px}
+#currentInfo>div,#floorInfo>div{display:grid;grid-template-columns:110px 1fr;border-bottom:1px solid #e7ecef;padding:6px 0}
+#currentInfo>div:last-child,#floorInfo>div:last-child{border-bottom:0}
+#currentInfo b,#floorInfo b{font-weight:700}
+#currentInfo span,#floorInfo span{color:#52636e}
