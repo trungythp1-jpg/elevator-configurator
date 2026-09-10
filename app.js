@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const LOCAL_MANIFEST_FALLBACK = {
   cabin: [
@@ -43,7 +42,6 @@ let library = cloneLibrary(LOCAL_MANIFEST_FALLBACK);
 let scene = null;
 let camera = null;
 let renderer = null;
-let controls = null;
 let viewer = null;
 let cabinGroup = null;
 let fillLight = null;
@@ -78,7 +76,7 @@ function showError(error) {
   $("#errorText").textContent = message;
   $("#errorBox").hidden = false;
   setLoading(false);
-  console.error("[Elevator Configurator V3]", error);
+  console.error("[Elevator Configurator V6]", error);
 }
 function hideError() { $("#errorBox").hidden = true; }
 function asset(cat, index) {
@@ -147,8 +145,9 @@ function initThree() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf0f3f2);
 
-  camera = new THREE.PerspectiveCamera(45, 1, 0.05, 100);
-  camera.position.set(0, 1.48, 4.35);
+  camera = new THREE.PerspectiveCamera(38, 1, 0.05, 100);
+  camera.position.set(0, 1.25, -3.35);
+  camera.lookAt(0, 1.18, 0.48);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -159,17 +158,6 @@ function initThree() {
 
   textureLoader = new THREE.TextureLoader();
 
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 1.22, 0.48);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.07;
-  controls.minDistance = 3.15;
-  controls.maxDistance = 6.4;
-  controls.enablePan = false;
-  controls.zoomSpeed = 0.7;
-  controls.rotateSpeed = 0.45;
-  controls.update();
-
   scene.add(new THREE.HemisphereLight(0xffffff, 0xb9c0c4, 2.1));
   const key = new THREE.DirectionalLight(0xffffff, 2.5);
   key.position.set(3.5, 4.5, 3);
@@ -178,7 +166,7 @@ function initThree() {
   rim.position.set(-3, 3, -2);
   scene.add(rim);
   fillLight = new THREE.PointLight(0xffffff, 18, 7);
-  fillLight.position.set(0, 2.15, 0.4);
+  fillLight.position.set(0, 0.0, 1.95);
   scene.add(fillLight);
 
   cabinGroup = new THREE.Group();
@@ -230,14 +218,16 @@ function rebuildCabin() {
     disposeObject(child);
   }
 
-  const W = 2.05, D = 1.85, H = 2.45, t = 0.055;
+  // Real cabin reference dimensions: W 1400 mm × D 1200 mm × H 2400 mm.
+  // Three.js units are metres.
+  const W = 1.40, D = 1.20, H = 2.40, t = 0.045;
   addBox("floor", [W, D, t], [0, 0, t / 2], floorMaterial());
   addBox("back", [W, t, H], [0, D / 2 - t / 2, H / 2], wallMaterial("back"));
   addBox("left", [t, D, H], [-W / 2 + t / 2, 0, H / 2], wallMaterial("left"));
   addBox("right", [t, D, H], [W / 2 - t / 2, 0, H / 2], wallMaterial("right"));
   addBox("ceiling", [W, D, t], [0, 0, H - t / 2], ceilingMaterial());
 
-  addBox("topTrim", [W, 0.045, 0.12], [0, D / 2 - 0.06, H - 0.12], ceilingMaterial());
+  addBox("topTrim", [W, 0.04, 0.10], [0, D / 2 - 0.05, H - 0.10], ceilingMaterial());
   addHandrail();
   addCop();
   applyLighting();
@@ -247,7 +237,7 @@ function addHandrail() {
   const item = asset("handrail", state.handrail);
   const material = materialFor("handrail", item, 0.23, 0.82);
   const geo = new THREE.CylinderGeometry(0.028, 0.028, 1.25, 24);
-  for (const [x, y, z] of [[-0.82, 0.18, 1.22], [0.82, 0.18, 1.22]]) {
+  for (const [x, y, z] of [[-0.48, 0.16, 1.18], [0.48, 0.16, 1.18]]) {
     const rail = new THREE.Mesh(geo, material);
     rail.rotation.z = Math.PI / 2;
     rail.position.set(x, y, z);
@@ -259,7 +249,7 @@ function addCop() {
   const item = asset("cop", state.cop);
   const material = materialFor("cop", item, 0.3, 0.7);
   const panel = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.055, 0.78), material);
-  panel.position.set(0.78, -0.92, 1.30);
+  panel.position.set(0.56, -0.36, 1.30);
   panel.rotation.x = 0.04;
   cabinGroup.add(panel);
 
@@ -267,7 +257,7 @@ function addCop() {
     new THREE.BoxGeometry(0.20, 0.012, 0.12),
     new THREE.MeshStandardMaterial({ color: 0x152329, emissive: 0x173b44, emissiveIntensity: 0.65, roughness: 0.2, metalness: 0.3 })
   );
-  screen.position.set(0.78, -0.892, 1.47);
+  screen.position.set(0.56, -0.33, 1.47);
   screen.rotation.x = 0.04;
   cabinGroup.add(screen);
 }
@@ -282,10 +272,9 @@ function applyLighting() {
 }
 
 function resetCamera() {
-  if (!camera || !controls) return;
-  camera.position.set(0, 1.48, 4.35);
-  controls.target.set(0, 1.22, 0.48);
-  controls.update();
+  if (!camera) return;
+  camera.position.set(0, 1.25, -3.35);
+  camera.lookAt(0, 1.18, 0.48);
 }
 
 function resize() {
@@ -391,6 +380,7 @@ function updateConfig() {
   $("#modeTitle").textContent = `3 Walls · ${state.wallMode === "same" ? "Same Material" : state.wallMode === "independent" ? "Independent" : "Etched Pattern"}`;
   $("#configPreview").textContent = JSON.stringify({
     cabin: cabin.code,
+    dimensions: "1400 × 1200 × 2400 mm",
     walls: {
       left: asset("walls", state.walls.left).code,
       back: asset("walls", state.walls.back).code,
@@ -495,7 +485,6 @@ async function setupFirebaseInBackground() {
 function animate() {
   requestAnimationFrame(animate);
   if (!renderer || !scene || !camera) return;
-  if (controls) controls.update();
   renderer.render(scene, camera);
 }
 
