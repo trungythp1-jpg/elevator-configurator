@@ -1,12 +1,12 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
 
 /*
-  ELEVATOR CONFIGURATOR — CABIN V6
+  ELEVATOR CONFIGURATOR — CABIN V8
   - Rebuilt cabin geometry to look like a real showroom elevator.
   - No handrail.
   - No COP.
   - No round spot lights.
-  - Recessed ceiling with linear LED strips.
+  - Showroom-style recessed ceiling with decorative CNC-inspired center panel, halo LED and downlights.
   - Procedural material textures are used for the demo, so the current
     floor PNG assets cannot distort the 3D floor.
   - Keep this file synchronized with the Standard V3 index.html/style.css.
@@ -17,7 +17,7 @@ const $ = id => document.getElementById(id);
 
 const catalog = {
   cabins: [
-    ["GV-001","Champagne Classic"],
+    ["GV-001","Basic Hairline Stainless"],
     ["GV-002","Black Luxury"],
     ["GV-003","Silver Minimal"],
     ["GV-004","Warm Bronze"],
@@ -82,7 +82,7 @@ function canvasTexture(key, painter, repeatX=1, repeatY=1){
 function metalTexture(name){
   const colors = {
     champagne:["#8f7047","#c8a56d","#765937"],
-    silver:["#8c969d","#e4e7e9","#737d83"],
+    silver:["#73797d","#d8dcde","#656b6f"],
     black:["#151719","#4a4e51","#0c0d0e"],
     bronze:["#5f4933","#a47e50","#443223"],
     white:["#c7ccd0","#f3f4f4","#a9afb3"],
@@ -185,7 +185,7 @@ function matFromTexture(key, texture, rough=.34, metal=.55){
 
 function wallMaterial(){
   const palettes = {
-    "GV-001":"champagne",
+    "GV-001":"silver",
     "GV-002":"black",
     "GV-003":"silver",
     "GV-004":"bronze",
@@ -353,17 +353,21 @@ function createCabin(){
      No door leaves, glass panels, or white door placeholders are
      created here. */
 
-  /* Vertical corner trims */
-  [-DIM.w/2+.028,DIM.w/2-.028].forEach(x=>{
-    const v=box(.035,DIM.h,.055,trim);
-    v.position.set(x,DIM.h/2,DIM.d/2-.025);
-    cabinRoot.add(v);
-  });
-
   /* Front architectural frame — narrow and realistic */
   frontFrame=new THREE.Group();
   const frameT=.045;
-  const frameMat=trim;
+  const frameMat=new THREE.MeshStandardMaterial({
+    color:0x3d4143,
+    roughness:.26,
+    metalness:.78
+  });
+
+  /* Vertical front corner trims */
+  [-DIM.w/2+.028,DIM.w/2-.028].forEach(x=>{
+    const v=box(.026,DIM.h,.045,frameMat);
+    v.position.set(x,DIM.h/2,DIM.d/2-.025);
+    cabinRoot.add(v);
+  });
 
   [-DIM.w/2-frameT/2,DIM.w/2+frameT/2].forEach(x=>{
     const v=box(frameT,DIM.h+.04,.08,frameMat);
@@ -381,62 +385,215 @@ function createCabin(){
 }
 
 function createCeiling(){
-  const trim=trimMaterial();
+  /*
+    CEILING V8 — showroom style
+    - Recessed multi-layer ceiling
+    - Matte ivory/white architectural cassette
+    - Dark shadow-gap around the recess
+    - Central decorative CNC-inspired floral/geometric panel
+    - Perimeter warm LED halo
+    - Four compact downlights
+    - No exposed stainless-steel ceiling sheet
+  */
+
+  const ivory=new THREE.MeshStandardMaterial({
+    color:0xf5f2ea,
+    roughness:.70,
+    metalness:0
+  });
+
+  const ivory2=new THREE.MeshStandardMaterial({
+    color:0xe7e3da,
+    roughness:.62,
+    metalness:.05
+  });
+
+  const shadow=new THREE.MeshStandardMaterial({
+    color:0x343638,
+    roughness:.48,
+    metalness:.18
+  });
+
+  const panelMat=new THREE.MeshStandardMaterial({
+    color:0x8b8880,
+    roughness:.48,
+    metalness:.28
+  });
+
+  const glowMat=new THREE.MeshStandardMaterial({
+    color:0xfff8e8,
+    emissive:0xffe7ae,
+    emissiveIntensity:3.2,
+    roughness:.25,
+    metalness:0
+  });
 
   const group=new THREE.Group();
 
-  /* Recessed ceiling cassette */
-  ceilingPanel=box(DIM.w-.14,.035,DIM.d-.14,new THREE.MeshStandardMaterial({
-    color:0xc9ced1,
-    roughness:.28,
-    metalness:.62
-  }));
-  ceilingPanel.position.set(0,DIM.h-.075,0);
-  group.add(ceilingPanel);
+  /* Outer ceiling cassette */
+  const outer=box(DIM.w-.08,.040,DIM.d-.08,ivory);
+  outer.position.set(0,DIM.h-.055,0);
+  group.add(outer);
 
-  /* Dark inner recess */
-  const recess=box(DIM.w-.25,.018,DIM.d-.25,new THREE.MeshStandardMaterial({
-    color:0x555d62,
-    roughness:.3,
-    metalness:.55
-  }));
-  recess.position.set(0,DIM.h-.052,0);
+  /* Deep shadow recess */
+  const recess=box(DIM.w-.22,.020,DIM.d-.22,shadow);
+  recess.position.set(0,DIM.h-.028,0);
   group.add(recess);
 
-  /* Silver outer ceiling frame */
-  ceilingFrame=new THREE.Group();
-  const t=.022;
+  /* Inner ivory ceiling field */
+  const inner=box(DIM.w-.27,.024,DIM.d-.27,ivory2);
+  inner.position.set(0,DIM.h-.010,0);
+  group.add(inner);
+
+  /* Perimeter recessed LED halo */
+  const halo=new THREE.Group();
+  const ledW=.018;
+  const ledY=DIM.h+.002;
+  const hx=DIM.w-.31;
+  const hz=DIM.d-.31;
+
   [
-    [DIM.w-.12,t,.05,0,DIM.h-.035,-(DIM.d-.12)/2],
-    [DIM.w-.12,t,.05,0,DIM.h-.035,(DIM.d-.12)/2],
-    [t,t,DIM.d-.12,-(DIM.w-.12)/2,DIM.h-.035,0],
-    [t,t,DIM.d-.12,(DIM.w-.12)/2,DIM.h-.035,0]
+    [hx,ledW,.022,0,ledY,-hz/2],
+    [hx,ledW,.022,0,ledY,hz/2],
+    [.022,ledW,hz,-hx/2,ledY,0],
+    [.022,ledW,hz,hx/2,ledY,0]
   ].forEach(([w,h,d,x,y,z])=>{
-    const m=box(w,h,d,trim);
-    m.position.set(x,y,z);
-    ceilingFrame.add(m);
-  });
-  group.add(ceilingFrame);
-
-  /* Two long recessed LED strips, not spotlights */
-  ledGroup=new THREE.Group();
-  const ledMat=emissiveMaterial();
-
-  [-.40,.40].forEach(x=>{
-    const strip=box(.075,.012,DIM.d-.34,ledMat);
-    strip.position.set(x,DIM.h-.043,0);
-    ledGroup.add(strip);
-
-    const light=new THREE.RectAreaLight(0xffffff,3.2,.075,DIM.d-.34);
-    light.position.set(x,DIM.h-.02,0);
-    light.rotation.x=Math.PI;
-    ledGroup.add(light);
+    const strip=box(w,h,d,glowMat);
+    strip.position.set(x,y,z);
+    halo.add(strip);
   });
 
-  group.add(ledGroup);
+  /* Warm architectural wash */
+  const washFront=new THREE.RectAreaLight(0xfff1cf,2.0,DIM.w-.30,.055);
+  washFront.position.set(0,DIM.h-.005,-DIM.d/2+.16);
+  washFront.rotation.x=Math.PI;
+  halo.add(washFront);
+
+  const washRear=new THREE.RectAreaLight(0xfff1cf,1.3,DIM.w-.30,.055);
+  washRear.position.set(0,DIM.h-.005,DIM.d/2-.16);
+  washRear.rotation.x=Math.PI;
+  halo.add(washRear);
+
+  const washLeft=new THREE.RectAreaLight(0xfff1cf,1.0,.055,DIM.d-.30);
+  washLeft.position.set(-DIM.w/2+.16,DIM.h-.005,0);
+  washLeft.rotation.z=Math.PI/2;
+  halo.add(washLeft);
+
+  const washRight=new THREE.RectAreaLight(0xfff1cf,1.0,.055,DIM.d-.30);
+  washRight.position.set(DIM.w/2-.16,DIM.h-.005,0);
+  washRight.rotation.z=-Math.PI/2;
+  halo.add(washRight);
+
+  group.add(halo);
+
+  /* Central decorative panel */
+  const panelW=DIM.w-.43;
+  const panelD=DIM.d-.43;
+  const panel=box(panelW,.016,panelD,panelMat);
+  panel.position.set(0,DIM.h+.008,0);
+  group.add(panel);
+
+  /* Inner bright border around CNC panel */
+  const bt=.010;
+  const bw=panelW-.055;
+  const bd=panelD-.055;
+  [
+    [bw,bt,.014,0,DIM.h+.019,-bd/2],
+    [bw,bt,.014,0,DIM.h+.019,bd/2],
+    [.014,bt,bd,-bw/2,DIM.h+.019,0],
+    [.014,bt,bd,bw/2,DIM.h+.019,0]
+  ].forEach(([w,h,d,x,y,z])=>{
+    const b=box(w,h,d,ivory);
+    b.position.set(x,y,z);
+    group.add(b);
+  });
+
+  /* CNC-inspired floral/geometric motif.
+     Built from thin luminous rings and petals rather than a flat white block,
+     so it reads as a decorative perforated panel. */
+  const motif=new THREE.Group();
+  const centerMat=glowMat;
+
+  const center=new THREE.Mesh(
+    new THREE.CylinderGeometry(.065,.065,.008,32),
+    centerMat
+  );
+  center.rotation.x=Math.PI/2;
+  center.position.set(0,DIM.h+.026,0);
+  motif.add(center);
+
+  for(let i=0;i<8;i++){
+    const a=i*Math.PI/4;
+    const petal=new THREE.Mesh(
+      new THREE.TorusGeometry(.105,.018,.8,24,Math.PI*1.35),
+      centerMat
+    );
+    petal.rotation.set(0,0,a);
+    petal.position.set(Math.cos(a)*.075,DIM.h+.026,Math.sin(a)*.075);
+    motif.add(petal);
+  }
+
+  for(let i=0;i<4;i++){
+    const a=i*Math.PI/2+Math.PI/4;
+    const petal=new THREE.Mesh(
+      new THREE.TorusGeometry(.175,.014,.8,28,Math.PI*1.25),
+      centerMat
+    );
+    petal.rotation.set(0,0,a);
+    petal.position.set(Math.cos(a)*.055,DIM.h+.025,Math.sin(a)*.055);
+    motif.add(petal);
+  }
+
+  /* Small CNC perforation clusters */
+  const dotGeo=new THREE.CylinderGeometry(.010,.010,.008,16);
+  for(const sx of [-1,1]){
+    for(const sz of [-1,1]){
+      for(let r=0;r<2;r++){
+        for(let c=0;c<3;c++){
+          const dot=new THREE.Mesh(dotGeo,centerMat);
+          dot.rotation.x=Math.PI/2;
+          dot.position.set(
+            sx*(.255+c*.030),
+            DIM.h+.025,
+            sz*(.205+r*.032)
+          );
+          motif.add(dot);
+        }
+      }
+    }
+  }
+
+  group.add(motif);
+
+  /* Four discreet downlights */
+  const lightPositions=[
+    [-.45,-.31], [.45,-.31], [-.45,.31], [.45,.31]
+  ];
+
+  for(const [x,z] of lightPositions){
+    const housing=new THREE.Mesh(
+      new THREE.CylinderGeometry(.045,.045,.012,32),
+      ivory
+    );
+    housing.rotation.x=Math.PI/2;
+    housing.position.set(x,DIM.h+.021,z);
+    group.add(housing);
+
+    const lamp=new THREE.Mesh(
+      new THREE.CircleGeometry(.026,32),
+      glowMat
+    );
+    lamp.rotation.x=-Math.PI/2;
+    lamp.position.set(x,DIM.h+.028,z);
+    group.add(lamp);
+
+    const point=new THREE.PointLight(0xffefc9,1.0,.95,2);
+    point.position.set(x,DIM.h-.05,z);
+    group.add(point);
+  }
+
   cabinRoot.add(group);
 }
-
 /* ---------- Rendering ---------- */
 
 function setup3D(){
@@ -499,11 +656,14 @@ function applyCamera(){
     open doorway. Negative Z is the viewer side.
   */
   const presets={
-    front:{pos:[0,1.30,-4.15],look:[0,1.20,.20],fov:38},
-    left:{pos:[-2.75,1.32,-3.30],look:[0,1.18,.18],fov:42},
-    right:{pos:[2.75,1.32,-3.30],look:[0,1.18,.18],fov:42},
-    ceiling:{pos:[0,3.55,-3.05],look:[0,1.90,.12],fov:43},
-    floor:{pos:[0,.72,-3.05],look:[0,.72,.28],fov:43}
+    /* Main showroom view:
+       centered on the doorway, slightly elevated, with enough perspective
+       to show BOTH the recessed ceiling and the complete floor. */
+    front:{pos:[0,1.42,-3.55],look:[0,1.28,.25],fov:40},
+    left:{pos:[-2.45,1.43,-3.10],look:[0,1.25,.20],fov:42},
+    right:{pos:[2.45,1.43,-3.10],look:[0,1.25,.20],fov:42},
+    ceiling:{pos:[0,3.20,-2.70],look:[0,1.78,.08],fov:43},
+    floor:{pos:[0,.78,-2.75],look:[0,.82,.30],fov:43}
   };
 
   const p=presets[state.view]||presets.front;
