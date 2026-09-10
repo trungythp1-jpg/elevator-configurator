@@ -34,6 +34,7 @@ const loading = $("loading");
 
 let scene, camera, renderer, cabinRoot;
 let wallMeshes = {}, floorMesh, ceilingMesh, doorFrame, railMesh, copMesh, lightRig;
+let detailGroup, floorDetailGroup, ceilingDetailGroup;
 const textureCache = new Map();
 
 function asset(category, code) {
@@ -86,27 +87,33 @@ function createCabin() {
   cabinRoot = new THREE.Group();
   scene.add(cabinRoot);
 
-  floorMesh = box(DIM.w, .045, DIM.d, texturedMat("floor", state.floor, .62, .08));
+  // Floor: a thin structural slab plus a raised material field and perimeter trim.
+  floorMesh = box(DIM.w, .045, DIM.d, texturedMat("floor", state.floor, .56, .10));
   floorMesh.position.y = .0225;
   cabinRoot.add(floorMesh);
 
-  const wt = .035;
+  floorDetailGroup = new THREE.Group();
+  cabinRoot.add(floorDetailGroup);
+  createFloorDetails();
 
-  wallMeshes.left = box(wt, DIM.h, DIM.d, texturedMat("walls", state.walls.left));
+  // Three real cabin walls with panel seams and slim architectural trims.
+  const wt = .036;
+  wallMeshes.left = box(wt, DIM.h, DIM.d, texturedMat("walls", state.walls.left, .34, .70));
   wallMeshes.left.position.set(-DIM.w/2 + wt/2, DIM.h/2, 0);
   cabinRoot.add(wallMeshes.left);
 
-  wallMeshes.back = box(DIM.w, DIM.h, wt, texturedMat("walls", state.walls.back));
+  wallMeshes.back = box(DIM.w, DIM.h, wt, texturedMat("walls", state.walls.back, .34, .70));
   wallMeshes.back.position.set(0, DIM.h/2, DIM.d/2 - wt/2);
   cabinRoot.add(wallMeshes.back);
 
-  wallMeshes.right = box(wt, DIM.h, DIM.d, texturedMat("walls", state.walls.right));
+  wallMeshes.right = box(wt, DIM.h, DIM.d, texturedMat("walls", state.walls.right, .34, .70));
   wallMeshes.right.position.set(DIM.w/2 - wt/2, DIM.h/2, 0);
   cabinRoot.add(wallMeshes.right);
 
-  ceilingMesh = box(DIM.w-.10, .06, DIM.d-.10, texturedMat("ceiling", state.ceiling, .55, .15));
-  ceilingMesh.position.y = DIM.h-.055;
-  cabinRoot.add(ceilingMesh);
+  detailGroup = new THREE.Group();
+  cabinRoot.add(detailGroup);
+  createWallDetails();
+  createCeilingDetails();
 
   createDoorFrame();
   railMesh = createHandrail();
@@ -118,6 +125,116 @@ function createCabin() {
   lightRig = new THREE.Group();
   cabinRoot.add(lightRig);
   updateLighting();
+}
+
+function createFloorDetails() {
+  if (!floorDetailGroup) return;
+
+  const trim = solidMat(0x9ea4a8, .22, .82);
+  const darkTrim = solidMat(0x54585b, .28, .72);
+
+  // Four slim perimeter strips make the floor read as a real finished cabin floor.
+  const front = box(DIM.w-.025, .025, .035, trim);
+  front.position.set(0,.055,-DIM.d/2+.035);
+  floorDetailGroup.add(front);
+
+  const back = box(DIM.w-.025, .022, .028, darkTrim);
+  back.position.set(0,.054,DIM.d/2-.035);
+  floorDetailGroup.add(back);
+
+  const left = box(.028,.024,DIM.d-.075, trim);
+  left.position.set(-DIM.w/2+.035,.054,0);
+  floorDetailGroup.add(left);
+
+  const right = box(.028,.024,DIM.d-.075, trim);
+  right.position.set(DIM.w/2-.035,.054,0);
+  floorDetailGroup.add(right);
+}
+
+function createWallDetails() {
+  if (!detailGroup) return;
+
+  const seam = solidMat(0x77736e, .25, .76);
+  const edge = solidMat(0xb8aa8d, .20, .82);
+  const base = solidMat(0x4e4b47, .32, .66);
+
+  // Back-wall vertical panel joints.
+  [-DIM.w/6, DIM.w/6].forEach(x => {
+    const joint = box(.008, DIM.h-.22, .010, seam);
+    joint.position.set(x, DIM.h/2+.01, DIM.d/2-.023);
+    detailGroup.add(joint);
+  });
+
+  // Side-wall joints.
+  [-DIM.d/6, DIM.d/6].forEach(z => {
+    const l = box(.010, DIM.h-.22, .008, seam);
+    l.position.set(-DIM.w/2+.022, DIM.h/2+.01, z);
+    detailGroup.add(l);
+
+    const r = box(.010, DIM.h-.22, .008, seam);
+    r.position.set(DIM.w/2-.022, DIM.h/2+.01, z);
+    detailGroup.add(r);
+  });
+
+  // Lower kick panels give the cabin a finished architectural base.
+  const backKick = box(DIM.w-.08,.12,.018,base);
+  backKick.position.set(0,.075,DIM.d/2-.026);
+  detailGroup.add(backKick);
+
+  const leftKick = box(.018,.12,DIM.d-.08,base);
+  leftKick.position.set(-DIM.w/2+.026,.075,0);
+  detailGroup.add(leftKick);
+
+  const rightKick = box(.018,.12,DIM.d-.08,base);
+  rightKick.position.set(DIM.w/2-.026,.075,0);
+  detailGroup.add(rightKick);
+
+  // Slim vertical corner lines.
+  [-DIM.w/2+.018, DIM.w/2-.018].forEach(x => {
+    const corner = box(.012,DIM.h-.08,.012,edge);
+    corner.position.set(x,DIM.h/2,.04);
+    detailGroup.add(corner);
+  });
+}
+
+function createCeilingDetails() {
+  if (!detailGroup) return;
+
+  ceilingDetailGroup = new THREE.Group();
+  detailGroup.add(ceilingDetailGroup);
+
+  const frame = solidMat(0xd8dadd,.18,.72);
+  const dark = solidMat(0x777a7d,.25,.60);
+  const light = solidMat(0xffffff,.10,.05);
+
+  // Recessed ceiling cassette.
+  const cassette = box(DIM.w-.16,.028,DIM.d-.16,solidMat(0xf4f5f6,.24,.12));
+  cassette.position.set(0,DIM.h-.082,0);
+  ceilingDetailGroup.add(cassette);
+
+  // Metallic outer frame.
+  const strips = [
+    [DIM.w-.08,.026,.035,0,DIM.h-.045,-DIM.d/2+.045],
+    [DIM.w-.08,.026,.035,0,DIM.h-.045,DIM.d/2-.045],
+    [.035,.026,DIM.d-.08,-DIM.w/2+.045,DIM.h-.045,0],
+    [.035,.026,DIM.d-.08,DIM.w/2-.045,DIM.h-.045,0]
+  ];
+  strips.forEach(([w,h,d,x,y,z]) => {
+    const s = box(w,h,d,frame);
+    s.position.set(x,y,z);
+    ceilingDetailGroup.add(s);
+  });
+
+  // Two long soft LED channels instead of exposed round bulbs.
+  [-.29,.29].forEach(x => {
+    const channel = box(.035,.012,.72,light);
+    channel.position.set(x,DIM.h-.055,0);
+    ceilingDetailGroup.add(channel);
+
+    const recess = box(.052,.009,.76,dark);
+    recess.position.set(x,DIM.h-.049,0);
+    ceilingDetailGroup.add(recess);
+  });
 }
 
 function createDoorFrame() {
@@ -149,17 +266,22 @@ function createDoorFrame() {
 function createHandrail() {
   const group = new THREE.Group();
   const colors = { H01:0xc8cbd0, H02:0xd5b77c, H03:0x202020, H04:0x7b5235 };
-  const material = solidMat(colors[state.handrail] || 0xc8cbd0, .22, .7);
+  const material = solidMat(colors[state.handrail] || 0xc8cbd0, .18, .78);
 
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.92,24), material);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.92,28), material);
   bar.rotation.z = Math.PI/2;
-  bar.position.set(0,1.05,DIM.d/2-.075);
+  bar.position.set(0,1.04,DIM.d/2-.075);
   group.add(bar);
 
   [-.46,.46].forEach(x => {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.17,20), material);
-    post.position.set(x,.965,DIM.d/2-.075);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.17,24), material);
+    post.position.set(x,.955,DIM.d/2-.075);
     group.add(post);
+
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(.027,.027,.012,24), material);
+    foot.rotation.x = Math.PI/2;
+    foot.position.set(x,.872,DIM.d/2-.075);
+    group.add(foot);
   });
 
   return group;
@@ -167,15 +289,51 @@ function createHandrail() {
 
 function createCOP() {
   const group = new THREE.Group();
+
   const colors = { P01:0xd5d7da, P02:0x18191b, P03:0xd4b16f, P04:0x202226 };
-  const material = solidMat(colors[state.cop] || 0x202226, .28, .62);
+  const bodyMat = solidMat(colors[state.cop] || 0x202226, .22, .70);
+  const screenMat = solidMat(0x101417,.16,.45);
+  const buttonMat = solidMat(0xe8eaec,.16,.45);
+  const glowMat = solidMat(0x8ce0b5,.12,.25);
 
-  const width = state.cop === "P04" ? .16 : .11;
-  const height = state.cop === "P04" ? .88 : .48;
+  const width = state.cop === "P04" ? .16 : .13;
+  const height = state.cop === "P04" ? .92 : .54;
+  const x = DIM.w/2-.078;
+  const y = state.cop === "P04" ? 1.24 : 1.28;
 
-  const panel = box(width, height, .035, material);
-  panel.position.set(DIM.w/2-.075,1.28,-.03);
+  const panel = box(width,height,.038,bodyMat);
+  panel.position.set(x,y,-.02);
   group.add(panel);
+
+  // Display at the upper end.
+  const screen = box(width*.68,.095,.008,screenMat);
+  screen.position.set(x,y+height*.28,-.043);
+  group.add(screen);
+
+  // Six compact control buttons.
+  const rows = 3;
+  const cols = 2;
+  for (let r=0;r<rows;r++) {
+    for (let c=0;c<cols;c++) {
+      const b = new THREE.Mesh(
+        new THREE.CylinderGeometry(.018,.018,.008,20),
+        (r===0 && c===0) ? glowMat : buttonMat
+      );
+      b.rotation.x = Math.PI/2;
+      b.position.set(
+        x + (c-.5)*.045,
+        y + height*.08 - r*.075,
+        -.045
+      );
+      group.add(b);
+    }
+  }
+
+  // Small emergency/key detail.
+  const key = new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.009,16),bodyMat);
+  key.rotation.x = Math.PI/2;
+  key.position.set(x,y-height*.28,-.045);
+  group.add(key);
 
   return group;
 }
@@ -188,21 +346,26 @@ function updateLighting() {
   }
 
   const values = {
-    L01:[0xffffff,1.45],
-    L02:[0xffdfad,1.55],
-    L03:[0xddeaff,1.5],
-    L04:[0xf0d5ff,1.65]
-  }[state.lighting] || [0xffffff,1.45];
+    L01:[0xffffff,1.15],
+    L02:[0xffdfad,1.25],
+    L03:[0xddeaff,1.18],
+    L04:[0xf0d5ff,1.28]
+  }[state.lighting] || [0xffffff,1.15];
 
-  [[-.43,-.30],[.43,-.30],[-.43,.30],[.43,.30]].forEach(([x,z]) => {
-    const panel = box(.20,.012,.045,solidMat(values[0],.15,.05));
-    panel.position.set(x,2.29,z);
-    lightRig.add(panel);
-
-    const light = new THREE.PointLight(values[0],values[1],1.0,2);
-    light.position.set(x,2.18,z);
+  // Soft ceiling wash. Four lights create depth without the old harsh spot bulbs.
+  [[-.30,-.28],[.30,-.28],[-.30,.28],[.30,.28]].forEach(([x,z]) => {
+    const light = new THREE.PointLight(values[0],values[1],1.45,2);
+    light.position.set(x,2.12,z);
     lightRig.add(light);
   });
+
+  const backWash = new THREE.PointLight(values[0],.72,1.65,2);
+  backWash.position.set(0,1.65,.45);
+  lightRig.add(backWash);
+
+  const frontWash = new THREE.PointLight(0xffffff,.48,1.7,2);
+  frontWash.position.set(0,1.35,-.70);
+  lightRig.add(frontWash);
 }
 
 function setup3D() {
@@ -262,14 +425,14 @@ function applyCamera() {
   const portrait = rect.height > rect.width * 1.10;
 
   if (portrait) {
-    camera.position.set(.34,1.38,-5.90);
-    camera.fov = 44;
+    camera.position.set(.26,1.36,-5.05);
+    camera.fov = 43;
   } else {
-    camera.position.set(.46,1.40,-5.35);
-    camera.fov = 40;
+    camera.position.set(.34,1.38,-4.72);
+    camera.fov = 39;
   }
 
-  camera.lookAt(0,1.10,.12);
+  camera.lookAt(0,1.13,.10);
   camera.updateProjectionMatrix();
 }
 
