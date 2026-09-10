@@ -1,541 +1,530 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
 
+/*
+  ELEVATOR CONFIGURATOR — CABIN V6
+  - Rebuilt cabin geometry to look like a real showroom elevator.
+  - No handrail.
+  - No COP.
+  - No round spot lights.
+  - Recessed ceiling with linear LED strips.
+  - Procedural material textures are used for the demo, so the current
+    floor PNG assets cannot distort the 3D floor.
+  - Keep this file synchronized with the Standard V3 index.html/style.css.
+*/
+
 const DIM = { w: 1.4, d: 1.2, h: 2.4 };
-const ASSET = "./assets/";
+const $ = id => document.getElementById(id);
 
 const catalog = {
   cabins: [
-    { code:"GV-001", name:"Champagne Classic" },
-    { code:"GV-002", name:"Black Luxury" },
-    { code:"GV-003", name:"Silver Minimal" }
+    ["GV-001","Champagne Classic"],
+    ["GV-002","Black Luxury"],
+    ["GV-003","Silver Minimal"],
+    ["GV-004","Warm Bronze"],
+    ["GV-005","Pearl White"],
+    ["GV-006","Dark Titanium"]
   ],
-  walls: [
-    ["I01","Champagne Gold"],["I02","Mirror Silver"],["I03","Hairline Silver"],["I04","Dark Titanium"],
-    ["I05","Rose Gold"],["I06","Black Mirror"],["I07","Warm Bronze"],["I08","Pearl White"]
-  ],
-  floor: [["S01","Black Stone"],["S02","Grey Stone"],["S03","Light Marble"],["S04","Dark Marble"],["S05","Warm Granite"],["S06","Wood Tone"]],
-  ceiling: [["T01","Square Light"],["T02","Linear Light"],["T03","Gold Frame"],["T04","Black Frame"],["T05","White Minimal"],["T06","Star Light"]],
-  doors: [["C01","Champagne"],["C02","Silver"],["C03","Black"],["C04","Rose Gold"],["C05","Bronze"],["C06","Mirror"]],
-  handrail: [["H01","Round Silver"],["H02","Round Gold"],["H03","Black"],["H04","Wood"]],
-  cop: [["P01","Slim Silver"],["P02","Black Glass"],["P03","Gold Frame"],["P04","Full Height"]],
-  lighting: [["L01","Neutral"],["L02","Warm"],["L03","Cool"],["L04","Accent"]]
+  floor: [
+    ["S01","Black Stone"],
+    ["S02","Grey Stone"],
+    ["S03","Light Marble"],
+    ["S04","Dark Marble"],
+    ["S05","Warm Granite"],
+    ["S06","Wood Tone"]
+  ]
 };
 
 const state = {
   cabin:"GV-001",
-  walls:{ left:"I01", back:"I01", right:"I01" },
-  floor:"S01", ceiling:"T01", door:"C01",
-  handrail:"H01", cop:"P01", lighting:"L01"
+  floor:"S01",
+  view:"front",
+  doorOpen:true
 };
 
-const $ = id => document.getElementById(id);
-const viewer = $("viewer");
-const loading = $("loading");
-
 let scene, camera, renderer, cabinRoot;
-let wallMeshes = {}, floorMesh, ceilingMesh, doorFrame, railMesh, copMesh, lightRig;
-let detailGroup, floorDetailGroup, ceilingDetailGroup;
+let floorMesh, floorBorder, ceilingPanel, ceilingFrame;
+let wallMeshes = {};
+let frontFrame;
+let ledGroup;
+const materialCache = new Map();
 const textureCache = new Map();
 
-function asset(category, code) {
-  return `${ASSET}${category}/${code}.png`;
-}
-
-function toast(text) {
+function toast(text){
   const el = $("toast");
-  if (!el) return;
+  if(!el) return;
   el.textContent = text;
   el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 1600);
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>el.classList.remove("show"),1500);
 }
 
-function makeTexture(path) {
-  if (textureCache.has(path)) return textureCache.get(path);
-  const texture = new THREE.TextureLoader().load(
-    path,
-    undefined,
-    undefined,
-    () => console.warn("Texture unavailable:", path)
-  );
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
-  textureCache.set(path, texture);
-  return texture;
+/* ---------- Demo material generators ---------- */
+
+function canvasTexture(key, painter, repeatX=1, repeatY=1){
+  if(textureCache.has(key)) return textureCache.get(key);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  painter(ctx,512,512);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatX,repeatY);
+  tex.anisotropy = Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 4,8);
+  textureCache.set(key,tex);
+  return tex;
 }
 
-function texturedMat(category, code, roughness=.42, metalness=.65) {
+function metalTexture(name){
+  const colors = {
+    champagne:["#8f7047","#c8a56d","#765937"],
+    silver:["#8c969d","#e4e7e9","#737d83"],
+    black:["#151719","#4a4e51","#0c0d0e"],
+    bronze:["#5f4933","#a47e50","#443223"],
+    white:["#c7ccd0","#f3f4f4","#a9afb3"],
+    titanium:["#30363a","#6d7479","#22272a"]
+  };
+  const c = colors[name] || colors.champagne;
+
+  return canvasTexture("metal-"+name,(ctx,w,h)=>{
+    const g=ctx.createLinearGradient(0,0,w,0);
+    g.addColorStop(0,c[0]); g.addColorStop(.48,c[1]); g.addColorStop(1,c[2]);
+    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+
+    ctx.globalAlpha=.18;
+    for(let y=0;y<h;y+=3){
+      ctx.fillStyle = y%6===0 ? "#ffffff" : "#000000";
+      ctx.fillRect(0,y,w,1);
+    }
+    ctx.globalAlpha=.07;
+    for(let x=0;x<w;x+=37){
+      ctx.fillStyle="#ffffff";
+      ctx.fillRect(x,0,2,h);
+    }
+    ctx.globalAlpha=1;
+  },1,2.2);
+}
+
+function floorTexture(code){
+  const configs = {
+    S01:{base:"#1b1c1e", vein:"#d7d0c4", grid:"#343638", kind:"stone"},
+    S02:{base:"#777d82", vein:"#d9dde0", grid:"#686e73", kind:"stone"},
+    S03:{base:"#eee8dc", vein:"#b9afa1", grid:"#d5cec2", kind:"stone"},
+    S04:{base:"#302b29", vein:"#b8a28e", grid:"#48403c", kind:"stone"},
+    S05:{base:"#b59b70", vein:"#665b4b", grid:"#9f8962", kind:"stone"},
+    S06:{base:"#7c5032", vein:"#d3a273", grid:"#5e3a25", kind:"wood"}
+  };
+  const cfg=configs[code] || configs.S01;
+  return canvasTexture("floor-"+code,(ctx,w,h)=>{
+    ctx.fillStyle=cfg.base;
+    ctx.fillRect(0,0,w,h);
+
+    if(cfg.kind==="wood"){
+      for(let y=0;y<h;y+=76){
+        ctx.fillStyle=(y/76)%2 ? cfg.base : "#865a38";
+        ctx.fillRect(0,y,w,72);
+        ctx.strokeStyle=cfg.grid;
+        ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(0,y+72); ctx.lineTo(w,y+72); ctx.stroke();
+
+        ctx.globalAlpha=.32;
+        ctx.strokeStyle=cfg.vein;
+        for(let k=0;k<7;k++){
+          const yy=y+8+k*9;
+          ctx.beginPath();
+          ctx.moveTo(0,yy);
+          ctx.bezierCurveTo(120,yy-5,250,yy+5,512,yy-2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha=1;
+      }
+      ctx.strokeStyle=cfg.grid;
+      ctx.lineWidth=3;
+      for(let x=0;x<w;x+=170){
+        ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();
+      }
+    }else{
+      ctx.strokeStyle=cfg.grid;
+      ctx.lineWidth=3;
+      for(let x=0;x<=w;x+=170){
+        ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();
+      }
+      for(let y=0;y<=h;y+=170){
+        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+      }
+
+      ctx.strokeStyle=cfg.vein;
+      ctx.lineWidth=2.2;
+      ctx.globalAlpha=.65;
+      for(let i=0;i<14;i++){
+        const x=(i*73)%w, y=(i*137)%h;
+        ctx.beginPath();
+        ctx.moveTo(x,y);
+        ctx.bezierCurveTo(x+35,y-35,x+55,y+40,x+115,y-12);
+        ctx.stroke();
+      }
+      ctx.globalAlpha=1;
+    }
+  },1.2,1.2);
+}
+
+function matFromTexture(key, texture, rough=.34, metal=.55){
+  if(materialCache.has(key)) return materialCache.get(key);
+  const mat=new THREE.MeshStandardMaterial({
+    map:texture,
+    roughness:rough,
+    metalness:metal
+  });
+  materialCache.set(key,mat);
+  return mat;
+}
+
+function wallMaterial(){
+  const palettes = {
+    "GV-001":"champagne",
+    "GV-002":"black",
+    "GV-003":"silver",
+    "GV-004":"bronze",
+    "GV-005":"white",
+    "GV-006":"titanium"
+  };
+  const name=palettes[state.cabin] || "champagne";
+  return matFromTexture("wall-"+name,metalTexture(name),.31,.72);
+}
+
+function floorMaterial(){
+  return matFromTexture("floor-"+state.floor,floorTexture(state.floor),.34,.16);
+}
+
+function trimMaterial(){
   return new THREE.MeshStandardMaterial({
-    map: makeTexture(asset(category, code)),
-    color: 0xffffff,
-    roughness,
-    metalness
+    color:0xb6bdc1,
+    roughness:.18,
+    metalness:.88
   });
 }
 
-function solidMat(color, roughness=.4, metalness=.2) {
-  return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+function darkTrimMaterial(){
+  return new THREE.MeshStandardMaterial({
+    color:0x262a2d,
+    roughness:.2,
+    metalness:.75
+  });
 }
 
-function box(w, h, d, material) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), material);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
+function emissiveMaterial(){
+  return new THREE.MeshStandardMaterial({
+    color:0xffffff,
+    emissive:0xffffff,
+    emissiveIntensity:2.5,
+    roughness:.18,
+    metalness:0
+  });
 }
 
-function createCabin() {
-  cabinRoot = new THREE.Group();
+function box(w,h,d,material){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);
+  m.castShadow=true;
+  m.receiveShadow=true;
+  return m;
+}
+
+/* ---------- Cabin geometry ---------- */
+
+function clearGroup(group){
+  while(group.children.length) group.remove(group.children[0]);
+}
+
+function buildWallPanel(width,height,depth,material){
+  const g=new THREE.Group();
+  const panel=box(width,height,depth,material);
+  g.add(panel);
+
+  const trim=trimMaterial();
+  const edge=.012;
+
+  [-width/2+edge/2,width/2-edge/2].forEach(x=>{
+    const v=box(.012,height,.014,trim);
+    v.position.set(x,0,-depth/2-.008);
+    g.add(v);
+  });
+
+  const top=box(width,.012,.014,trim);
+  top.position.set(0,height/2,-depth/2-.008);
+  g.add(top);
+
+  return g;
+}
+
+function createCabin(){
+  cabinRoot=new THREE.Group();
   scene.add(cabinRoot);
 
-  // Floor: a thin structural slab plus a raised material field and perimeter trim.
-  floorMesh = box(DIM.w, .045, DIM.d, texturedMat("floor", state.floor, .56, .10));
-  floorMesh.position.y = .0225;
+  const wall=wallMaterial();
+  const trim=trimMaterial();
+  const dark=darkTrimMaterial();
+
+  /* Floor slab */
+  floorMesh=box(DIM.w-.07,.055,DIM.d-.07,floorMaterial());
+  floorMesh.position.set(0,.028,0);
   cabinRoot.add(floorMesh);
 
-  floorDetailGroup = new THREE.Group();
-  cabinRoot.add(floorDetailGroup);
-  createFloorDetails();
+  /* Floor perimeter — real threshold/base feeling */
+  floorBorder=new THREE.Group();
+  const border=.035;
+  const front=box(DIM.w,.065,border,trim);
+  front.position.set(0,.055,-DIM.d/2+.025);
+  floorBorder.add(front);
 
-  // Three real cabin walls with panel seams and slim architectural trims.
-  const wt = .036;
-  wallMeshes.left = box(wt, DIM.h, DIM.d, texturedMat("walls", state.walls.left, .34, .70));
-  wallMeshes.left.position.set(-DIM.w/2 + wt/2, DIM.h/2, 0);
+  const left=box(border,.065,DIM.d-.03,trim);
+  left.position.set(-DIM.w/2+.025,.055,0);
+  floorBorder.add(left);
+
+  const right=box(border,.065,DIM.d-.03,trim);
+  right.position.set(DIM.w/2-.025,.055,0);
+  floorBorder.add(right);
+
+  const back=box(DIM.w,.065,border,trim);
+  back.position.set(0,.055,DIM.d/2-.025);
+  floorBorder.add(back);
+
+  cabinRoot.add(floorBorder);
+
+  /* Left / right walls */
+  wallMeshes.left=buildWallPanel(DIM.d,DIM.h,.038,wall);
+  wallMeshes.left.rotation.y=Math.PI/2;
+  wallMeshes.left.position.set(-DIM.w/2+.019,DIM.h/2,0);
   cabinRoot.add(wallMeshes.left);
 
-  wallMeshes.back = box(DIM.w, DIM.h, wt, texturedMat("walls", state.walls.back, .34, .70));
-  wallMeshes.back.position.set(0, DIM.h/2, DIM.d/2 - wt/2);
-  cabinRoot.add(wallMeshes.back);
-
-  wallMeshes.right = box(wt, DIM.h, DIM.d, texturedMat("walls", state.walls.right, .34, .70));
-  wallMeshes.right.position.set(DIM.w/2 - wt/2, DIM.h/2, 0);
+  wallMeshes.right=buildWallPanel(DIM.d,DIM.h,.038,wall);
+  wallMeshes.right.rotation.y=Math.PI/2;
+  wallMeshes.right.position.set(DIM.w/2-.019,DIM.h/2,0);
   cabinRoot.add(wallMeshes.right);
 
-  detailGroup = new THREE.Group();
-  cabinRoot.add(detailGroup);
-  createWallDetails();
-  createCeilingDetails();
+  /* Rear wall = 3 balanced panels */
+  const rear=new THREE.Group();
+  const panelGap=.012;
+  const rearW=(DIM.w-.10-panelGap*2)/3;
 
-  createDoorFrame();
+  for(let i=0;i<3;i++){
+    const p=buildWallPanel(rearW,DIM.h-.11,.035,wall);
+    p.position.x=(i-1)*(rearW+panelGap);
+    p.position.y=.055;
+    rear.add(p);
+  }
+
+  /* lower kick panel */
+  const kick=box(DIM.w-.07,.12,.045,trim);
+  kick.position.set(0,.10,DIM.d/2-.022);
+  rear.add(kick);
+
+  rear.position.set(0,DIM.h/2,.0);
+  rear.position.y=0;
+  rear.position.z=DIM.d/2-.018;
+  cabinRoot.add(rear);
+  wallMeshes.back=rear;
+
+  /* Vertical corner trims */
+  [-DIM.w/2+.028,DIM.w/2-.028].forEach(x=>{
+    const v=box(.035,DIM.h,.055,trim);
+    v.position.set(x,DIM.h/2,DIM.d/2-.025);
+    cabinRoot.add(v);
+  });
+
+  /* Front architectural frame — narrow and realistic */
+  frontFrame=new THREE.Group();
+  const frameT=.045;
+  const frameMat=dark;
+
+  [-DIM.w/2-frameT/2,DIM.w/2+frameT/2].forEach(x=>{
+    const v=box(frameT,DIM.h+.04,.08,frameMat);
+    v.position.set(x,DIM.h/2,-DIM.d/2-.035);
+    frontFrame.add(v);
+  });
+
+  const top=box(DIM.w+frameT*2,frameT,.08,frameMat);
+  top.position.set(0,DIM.h+frameT/2,-DIM.d/2-.035);
+  frontFrame.add(top);
+
+  cabinRoot.add(frontFrame);
+
+  createCeiling();
 }
 
-function createFloorDetails() {
-  if (!floorDetailGroup) return;
+function createCeiling(){
+  const trim=trimMaterial();
 
-  const trim = solidMat(0x9ea4a8, .22, .82);
-  const darkTrim = solidMat(0x54585b, .28, .72);
+  const group=new THREE.Group();
 
-  // Four slim perimeter strips make the floor read as a real finished cabin floor.
-  const front = box(DIM.w-.025, .025, .035, trim);
-  front.position.set(0,.055,-DIM.d/2+.035);
-  floorDetailGroup.add(front);
+  /* Recessed ceiling cassette */
+  ceilingPanel=box(DIM.w-.14,.035,DIM.d-.14,new THREE.MeshStandardMaterial({
+    color:0xc9ced1,
+    roughness:.28,
+    metalness:.62
+  }));
+  ceilingPanel.position.set(0,DIM.h-.075,0);
+  group.add(ceilingPanel);
 
-  const back = box(DIM.w-.025, .022, .028, darkTrim);
-  back.position.set(0,.054,DIM.d/2-.035);
-  floorDetailGroup.add(back);
+  /* Dark inner recess */
+  const recess=box(DIM.w-.25,.018,DIM.d-.25,new THREE.MeshStandardMaterial({
+    color:0x555d62,
+    roughness:.3,
+    metalness:.55
+  }));
+  recess.position.set(0,DIM.h-.052,0);
+  group.add(recess);
 
-  const left = box(.028,.024,DIM.d-.075, trim);
-  left.position.set(-DIM.w/2+.035,.054,0);
-  floorDetailGroup.add(left);
+  /* Silver outer ceiling frame */
+  ceilingFrame=new THREE.Group();
+  const t=.022;
+  [
+    [DIM.w-.12,t,.05,0,DIM.h-.035,-(DIM.d-.12)/2],
+    [DIM.w-.12,t,.05,0,DIM.h-.035,(DIM.d-.12)/2],
+    [t,t,DIM.d-.12,-(DIM.w-.12)/2,DIM.h-.035,0],
+    [t,t,DIM.d-.12,(DIM.w-.12)/2,DIM.h-.035,0]
+  ].forEach(([w,h,d,x,y,z])=>{
+    const m=box(w,h,d,trim);
+    m.position.set(x,y,z);
+    ceilingFrame.add(m);
+  });
+  group.add(ceilingFrame);
 
-  const right = box(.028,.024,DIM.d-.075, trim);
-  right.position.set(DIM.w/2-.035,.054,0);
-  floorDetailGroup.add(right);
-}
+  /* Two long recessed LED strips, not spotlights */
+  ledGroup=new THREE.Group();
+  const ledMat=emissiveMaterial();
 
-function createWallDetails() {
-  if (!detailGroup) return;
+  [-.40,.40].forEach(x=>{
+    const strip=box(.075,.012,DIM.d-.34,ledMat);
+    strip.position.set(x,DIM.h-.043,0);
+    ledGroup.add(strip);
 
-  const seam = solidMat(0x77736e, .25, .76);
-  const edge = solidMat(0xb8aa8d, .20, .82);
-  const base = solidMat(0x4e4b47, .32, .66);
-
-  // Back-wall vertical panel joints.
-  [-DIM.w/6, DIM.w/6].forEach(x => {
-    const joint = box(.008, DIM.h-.22, .010, seam);
-    joint.position.set(x, DIM.h/2+.01, DIM.d/2-.023);
-    detailGroup.add(joint);
+    const light=new THREE.RectAreaLight(0xffffff,3.2,.075,DIM.d-.34);
+    light.position.set(x,DIM.h-.02,0);
+    light.rotation.x=Math.PI;
+    ledGroup.add(light);
   });
 
-  // Side-wall joints.
-  [-DIM.d/6, DIM.d/6].forEach(z => {
-    const l = box(.010, DIM.h-.22, .008, seam);
-    l.position.set(-DIM.w/2+.022, DIM.h/2+.01, z);
-    detailGroup.add(l);
-
-    const r = box(.010, DIM.h-.22, .008, seam);
-    r.position.set(DIM.w/2-.022, DIM.h/2+.01, z);
-    detailGroup.add(r);
-  });
-
-  // Lower kick panels give the cabin a finished architectural base.
-  const backKick = box(DIM.w-.08,.12,.018,base);
-  backKick.position.set(0,.075,DIM.d/2-.026);
-  detailGroup.add(backKick);
-
-  const leftKick = box(.018,.12,DIM.d-.08,base);
-  leftKick.position.set(-DIM.w/2+.026,.075,0);
-  detailGroup.add(leftKick);
-
-  const rightKick = box(.018,.12,DIM.d-.08,base);
-  rightKick.position.set(DIM.w/2-.026,.075,0);
-  detailGroup.add(rightKick);
-
-  // Slim vertical corner lines.
-  [-DIM.w/2+.018, DIM.w/2-.018].forEach(x => {
-    const corner = box(.012,DIM.h-.08,.012,edge);
-    corner.position.set(x,DIM.h/2,.04);
-    detailGroup.add(corner);
-  });
-}
-
-function createCeilingDetails() {
-  if (!detailGroup) return;
-
-  ceilingDetailGroup = new THREE.Group();
-  detailGroup.add(ceilingDetailGroup);
-
-  const frame = solidMat(0xd8dadd,.18,.72);
-  const dark = solidMat(0x777a7d,.25,.60);
-  const light = solidMat(0xffffff,.10,.05);
-
-  // Recessed ceiling cassette.
-  const cassette = box(DIM.w-.16,.028,DIM.d-.16,solidMat(0xf4f5f6,.24,.12));
-  cassette.position.set(0,DIM.h-.082,0);
-  ceilingDetailGroup.add(cassette);
-
-  // Metallic outer frame.
-  const strips = [
-    [DIM.w-.08,.026,.035,0,DIM.h-.045,-DIM.d/2+.045],
-    [DIM.w-.08,.026,.035,0,DIM.h-.045,DIM.d/2-.045],
-    [.035,.026,DIM.d-.08,-DIM.w/2+.045,DIM.h-.045,0],
-    [.035,.026,DIM.d-.08,DIM.w/2-.045,DIM.h-.045,0]
-  ];
-  strips.forEach(([w,h,d,x,y,z]) => {
-    const s = box(w,h,d,frame);
-    s.position.set(x,y,z);
-    ceilingDetailGroup.add(s);
-  });
-
-  // Clean recessed ceiling: no visible lamps in this cabin baseline.
-}
-
-function createDoorFrame() {
-  if (doorFrame) cabinRoot.remove(doorFrame);
-
-  const colors = {
-    C01:0xc9b18b, C02:0xbec3c8, C03:0x202124,
-    C04:0xc78e83, C05:0x9c7751, C06:0xbec3c8
-  };
-
-  const material = solidMat(colors[state.door] || 0xbec3c8, .27, .78);
-  const group = new THREE.Group();
-  const t = .038;
-
-  [-DIM.w/2+t/2, DIM.w/2-t/2].forEach(x => {
-    const part = box(t, DIM.h, .05, material);
-    part.position.set(x, DIM.h/2, -DIM.d/2-.07);
-    group.add(part);
-  });
-
-  const top = box(DIM.w, t, .05, material);
-  top.position.set(0, DIM.h-t/2, -DIM.d/2-.07);
-  group.add(top);
-
-  doorFrame = group;
+  group.add(ledGroup);
   cabinRoot.add(group);
 }
 
-function createHandrail() {
-  const group = new THREE.Group();
-  const colors = { H01:0xc8cbd0, H02:0xd5b77c, H03:0x202020, H04:0x7b5235 };
-  const material = solidMat(colors[state.handrail] || 0xc8cbd0, .18, .78);
+/* ---------- Rendering ---------- */
 
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.92,28), material);
-  bar.rotation.z = Math.PI/2;
-  bar.position.set(0,1.04,DIM.d/2-.075);
-  group.add(bar);
+function setup3D(){
+  const viewer=$("viewer");
+  const loading=$("loading");
+  if(!viewer) throw new Error("viewer element missing");
 
-  [-.46,.46].forEach(x => {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.17,24), material);
-    post.position.set(x,.955,DIM.d/2-.075);
-    group.add(post);
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0xf1f3f4);
 
-    const foot = new THREE.Mesh(new THREE.CylinderGeometry(.027,.027,.012,24), material);
-    foot.rotation.x = Math.PI/2;
-    foot.position.set(x,.872,DIM.d/2-.075);
-    group.add(foot);
-  });
+  camera=new THREE.PerspectiveCamera(38,1,.05,30);
 
-  return group;
-}
-
-function createCOP() {
-  const group = new THREE.Group();
-
-  const colors = { P01:0xd5d7da, P02:0x18191b, P03:0xd4b16f, P04:0x202226 };
-  const bodyMat = solidMat(colors[state.cop] || 0x202226, .22, .70);
-  const screenMat = solidMat(0x101417,.16,.45);
-  const buttonMat = solidMat(0xe8eaec,.16,.45);
-  const glowMat = solidMat(0x8ce0b5,.12,.25);
-
-  const width = state.cop === "P04" ? .16 : .13;
-  const height = state.cop === "P04" ? .92 : .54;
-  const x = DIM.w/2-.078;
-  const y = state.cop === "P04" ? 1.24 : 1.28;
-
-  const panel = box(width,height,.038,bodyMat);
-  panel.position.set(x,y,-.02);
-  group.add(panel);
-
-  // Display at the upper end.
-  const screen = box(width*.68,.095,.008,screenMat);
-  screen.position.set(x,y+height*.28,-.043);
-  group.add(screen);
-
-  // Six compact control buttons.
-  const rows = 3;
-  const cols = 2;
-  for (let r=0;r<rows;r++) {
-    for (let c=0;c<cols;c++) {
-      const b = new THREE.Mesh(
-        new THREE.CylinderGeometry(.018,.018,.008,20),
-        (r===0 && c===0) ? glowMat : buttonMat
-      );
-      b.rotation.x = Math.PI/2;
-      b.position.set(
-        x + (c-.5)*.045,
-        y + height*.08 - r*.075,
-        -.045
-      );
-      group.add(b);
-    }
-  }
-
-  // Small emergency/key detail.
-  const key = new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.009,16),bodyMat);
-  key.rotation.x = Math.PI/2;
-  key.position.set(x,y-height*.28,-.045);
-  group.add(key);
-
-  return group;
-}
-
-function updateLighting() {
-  if (!lightRig) return;
-
-  while (lightRig.children.length) {
-    lightRig.remove(lightRig.children[0]);
-  }
-
-  const values = {
-    L01:[0xffffff,1.15],
-    L02:[0xffdfad,1.25],
-    L03:[0xddeaff,1.18],
-    L04:[0xf0d5ff,1.28]
-  }[state.lighting] || [0xffffff,1.15];
-
-  // Soft ceiling wash. Four lights create depth without the old harsh spot bulbs.
-  [[-.30,-.28],[.30,-.28],[-.30,.28],[.30,.28]].forEach(([x,z]) => {
-    const light = new THREE.PointLight(values[0],values[1],1.45,2);
-    light.position.set(x,2.12,z);
-    lightRig.add(light);
-  });
-
-  const backWash = new THREE.PointLight(values[0],.72,1.65,2);
-  backWash.position.set(0,1.65,.45);
-  lightRig.add(backWash);
-
-  const frontWash = new THREE.PointLight(0xffffff,.48,1.7,2);
-  frontWash.position.set(0,1.35,-.70);
-  lightRig.add(frontWash);
-}
-
-function setup3D() {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf1f3f4);
-
-  camera = new THREE.PerspectiveCamera(42,1,.05,30);
-
-  renderer = new THREE.WebGLRenderer({
+  renderer=new THREE.WebGLRenderer({
     antialias:true,
     alpha:true,
     preserveDrawingBuffer:true
   });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.75));
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.75));
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-  viewer.innerHTML = "";
+  viewer.innerHTML="";
   viewer.appendChild(renderer.domElement);
 
-  scene.add(new THREE.HemisphereLight(0xffffff,0xb7bec4,1.65));
+  scene.add(new THREE.HemisphereLight(0xffffff,0x7e878c,1.35));
 
-  const key = new THREE.DirectionalLight(0xffffff,2.15);
-  key.position.set(-2.5,4.5,-4.5);
-  key.castShadow = true;
+  const key=new THREE.DirectionalLight(0xffffff,1.8);
+  key.position.set(-2.8,4.2,-4.5);
+  key.castShadow=true;
   key.shadow.mapSize.set(1024,1024);
   scene.add(key);
 
-  const fill = new THREE.DirectionalLight(0xdde6f0,1.05);
-  fill.position.set(3,2,-2);
+  const fill=new THREE.DirectionalLight(0xd9e4ed,.85);
+  fill.position.set(2.5,2,-2);
   scene.add(fill);
 
   createCabin();
   applyCamera();
 
-  window.addEventListener("resize", applyCamera, {passive:true});
+  window.addEventListener("resize",applyCamera,{passive:true});
+  if(window.ResizeObserver) new ResizeObserver(applyCamera).observe(viewer);
 
-  if (window.ResizeObserver) {
-    new ResizeObserver(applyCamera).observe(viewer);
-  }
-
-  loading.style.display = "none";
+  if(loading) loading.style.display="none";
   animate();
 }
 
-function applyCamera() {
-  if (!renderer || !camera) return;
+function applyCamera(){
+  if(!renderer||!camera) return;
 
-  const rect = viewer.getBoundingClientRect();
-  if (rect.width < 10 || rect.height < 10) return;
+  const viewer=$("viewer");
+  const r=viewer.getBoundingClientRect();
+  if(r.width<10||r.height<10) return;
 
-  renderer.setSize(rect.width,rect.height,false);
-  camera.aspect = rect.width / rect.height;
+  renderer.setSize(r.width,r.height,false);
+  camera.aspect=r.width/r.height;
 
-  const portrait = rect.height > rect.width * 1.10;
+  /*
+    The cabin is intentionally viewed from slightly in front of the
+    open doorway. Negative Z is the viewer side.
+  */
+  const presets={
+    front:{pos:[0,1.30,-4.15],look:[0,1.20,.20],fov:38},
+    left:{pos:[-2.75,1.32,-3.30],look:[0,1.18,.18],fov:42},
+    right:{pos:[2.75,1.32,-3.30],look:[0,1.18,.18],fov:42},
+    ceiling:{pos:[0,3.55,-3.05],look:[0,1.90,.12],fov:43},
+    floor:{pos:[0,.72,-3.05],look:[0,.72,.28],fov:43}
+  };
 
-  if (portrait) {
-    camera.position.set(.26,1.36,-5.05);
-    camera.fov = 43;
-  } else {
-    camera.position.set(.34,1.38,-4.72);
-    camera.fov = 39;
-  }
-
-  camera.lookAt(0,1.13,.10);
+  const p=presets[state.view]||presets.front;
+  camera.position.set(...p.pos);
+  camera.fov=p.fov;
+  camera.lookAt(...p.look);
   camera.updateProjectionMatrix();
 }
 
-function animate() {
+function animate(){
   requestAnimationFrame(animate);
-  if (renderer) renderer.render(scene,camera);
+  if(renderer) renderer.render(scene,camera);
 }
 
-function updateSummary() {
-  const info = $("currentInfo");
-  if (!info) return;
+/* ---------- UI ---------- */
 
-  const cabin = catalog.cabins.find(item => item.code === state.cabin);
-
-  info.innerHTML = `
-    <div><b>Mã mẫu</b><span>${state.cabin}</span></div>
-    <div><b>Kiểu cabin</b><span>${cabin ? cabin.name : ""}</span></div>
-    <div><b>Vách</b><span>${state.walls.left} / ${state.walls.back} / ${state.walls.right}</span></div>
-    <div><b>Sàn</b><span>${state.floor}</span></div>
-    <div><b>Trần</b><span>${state.ceiling}</span></div>
-    <div><b>Cửa</b><span>${state.door}</span></div>
-  `;
-}
-
-function renderCabins() {
-  const targets = [$("cabinStyleGrid"), $("cabinCatalog")].filter(Boolean);
-
-  targets.forEach(container => {
-    container.innerHTML = "";
-
-    catalog.cabins.forEach(cabin => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "choice-card" + (state.cabin === cabin.code ? " active" : "");
-      button.innerHTML = `
+function renderCabins(){
+  const targets=[$("cabinStyleGrid"),$("cabinCatalog")].filter(Boolean);
+  targets.forEach(container=>{
+    container.innerHTML="";
+    catalog.cabins.forEach(([code,name])=>{
+      const b=document.createElement("button");
+      b.type="button";
+      b.className="choice-card"+(state.cabin===code?" active":"");
+      b.innerHTML=`
         <div class="choice-thumb"></div>
-        <div class="choice-name">${cabin.name}</div>
-        <div class="choice-code">${cabin.code}</div>
+        <div class="choice-name">${name}</div>
+        <div class="choice-code">${code}</div>
       `;
-
-      button.onclick = () => {
-        state.cabin = cabin.code;
+      b.onclick=()=>{
+        state.cabin=code;
+        updateCabinMaterial();
         renderCabins();
         updateSummary();
-        toast(cabin.code);
+        toast(`${code} · ${name}`);
       };
-
-      container.appendChild(button);
+      container.appendChild(b);
     });
   });
 }
 
-function updateMaterials() {
-  if (!wallMeshes.left) return;
+function renderFloorSection(){
+  const panel=document.querySelector(".left-panel");
+  if(!panel) return;
 
-  wallMeshes.left.material = texturedMat("walls",state.walls.left);
-  wallMeshes.back.material = texturedMat("walls",state.walls.back);
-  wallMeshes.right.material = texturedMat("walls",state.walls.right);
-  floorMesh.material = texturedMat("floor",state.floor,.62,.08);
-  ceilingMesh.material = texturedMat("ceiling",state.ceiling,.55,.15);
-
-  createDoorFrame();
-  updateSummary();
-}
-
-function bindControls() {
-  const left = $("rotateLeft");
-  const right = $("rotateRight");
-  const door = $("doorToggle");
-
-  // Keep the baseline visual stable: these controls are intentionally subtle.
-  if (left) left.onclick = () => toast("Góc nhìn cố định");
-  if (right) right.onclick = () => toast("Góc nhìn cố định");
-  if (door) door.onclick = () => toast("Mặt trước đang mở");
-
-  document.querySelectorAll(".view-card").forEach(button => {
-    button.addEventListener("click", () => {
-      document.querySelectorAll(".view-card").forEach(x => x.classList.remove("active"));
-      button.classList.add("active");
-      toast(button.querySelector("span")?.textContent || "Góc nhìn");
-    });
-  });
-
-  const quote = $("quoteBtn");
-  if (quote) quote.onclick = () => toast("Demo: yêu cầu báo giá sẵn sàng");
-
-  const save = $("saveBtn");
-  if (save) save.onclick = () => toast("Đã lưu cấu hình mẫu");
-
-  const image = $("imageBtn");
-  if (image) image.onclick = () => toast("Demo: xuất hình ảnh");
-
-  const share = $("shareBtn");
-  if (share) share.onclick = () => toast("Demo: chia sẻ mẫu");
-}
-
-
-function renderCabinSection() {
-  const panel = document.querySelector(".left-panel");
-  if (!panel) return;
-
-  panel.innerHTML = `
-    <div class="panel cabin-panel">
-      <div class="panel-heading"><strong>Chọn kiểu cabin</strong><span>⌄</span></div>
-      <div id="cabinStyleGrid" class="style-grid"></div>
-    </div>
-    <div class="panel info-panel">
-      <div class="info-title">Thông tin mẫu hiện tại</div>
-      <div id="currentInfo"></div>
-    </div>
-  `;
-
-  renderCabins();
-  updateSummary();
-}
-
-function renderFloorSection() {
-  const panel = document.querySelector(".left-panel");
-  if (!panel) return;
-
-  panel.innerHTML = `
+  panel.innerHTML=`
     <div class="panel cabin-panel">
       <div class="panel-heading"><strong>Chọn mẫu sàn</strong><span>⌄</span></div>
       <div id="floorStyleGrid" class="style-grid"></div>
@@ -546,111 +535,184 @@ function renderFloorSection() {
     </div>
   `;
 
-  const grid = $("floorStyleGrid");
-  catalog.floor.forEach(([code, name]) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "choice-card" + (state.floor === code ? " active" : "");
-    button.innerHTML = `
-      <div class="choice-thumb" style="background:linear-gradient(135deg,#444,#aaa)"></div>
+  const grid=$("floorStyleGrid");
+  catalog.floor.forEach(([code,name])=>{
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="choice-card"+(state.floor===code?" active":"");
+    b.innerHTML=`
+      <div class="choice-thumb floor-choice-${code}"></div>
       <div class="choice-name">${name}</div>
       <div class="choice-code">${code}</div>
     `;
-
-    button.onclick = () => {
-      state.floor = code;
-      updateMaterials();
+    b.onclick=()=>{
+      state.floor=code;
+      updateFloorMaterial();
       renderFloorSection();
+      updateSummary();
       toast(`${code} · ${name}`);
     };
-
-    grid.appendChild(button);
+    grid.appendChild(b);
   });
 
-  const current = catalog.floor.find(([code]) => code === state.floor);
-  $("floorInfo").innerHTML = `
+  const current=catalog.floor.find(x=>x[0]===state.floor);
+  $("floorInfo").innerHTML=`
     <div><b>Mã sàn</b><span>${state.floor}</span></div>
-    <div><b>Mẫu</b><span>${current ? current[1] : ""}</span></div>
+    <div><b>Mẫu</b><span>${current?current[1]:""}</span></div>
   `;
 }
 
-function openSection(section, button) {
-  if (button) {
-    document.querySelectorAll(".rail-item").forEach(x => x.classList.remove("active"));
-    button.classList.add("active");
-  }
+function renderCabinSection(){
+  const panel=document.querySelector(".left-panel");
+  if(!panel) return;
 
-  if (section === "cabin") {
-    renderCabinSection();
-    return true;
-  }
+  panel.innerHTML=`
+    <div class="panel cabin-panel">
+      <div class="panel-heading"><strong>Chọn kiểu cabin</strong><span>⌄</span></div>
+      <div id="cabinStyleGrid" class="style-grid"></div>
+    </div>
+    <div class="panel info-panel">
+      <div class="info-title">Thông tin mẫu hiện tại</div>
+      <div id="currentInfo"></div>
+    </div>
+  `;
+  renderCabins();
+  updateSummary();
+}
 
-  if (section === "floor") {
-    renderFloorSection();
-    return true;
+function updateCabinMaterial(){
+  const m=wallMaterial();
+  ["left","right"].forEach(k=>{
+    if(wallMeshes[k]){
+      wallMeshes[k].traverse(o=>{
+        if(o.isMesh && o!==undefined) o.material=m;
+      });
+    }
+  });
+  if(wallMeshes.back){
+    wallMeshes.back.traverse(o=>{
+      if(o.isMesh) o.material=m;
+    });
   }
+}
+
+function updateFloorMaterial(){
+  if(floorMesh) floorMesh.material=floorMaterial();
+}
+
+function updateSummary(){
+  const info=$("currentInfo");
+  if(!info) return;
+
+  const cabin=catalog.cabins.find(x=>x[0]===state.cabin);
+  const floor=catalog.floor.find(x=>x[0]===state.floor);
+
+  info.innerHTML=`
+    <div><b>Mã mẫu</b><span>${state.cabin}</span></div>
+    <div><b>Kiểu cabin</b><span>${cabin?cabin[1]:""}</span></div>
+    <div><b>Kích thước</b><span>1400 × 1200 × 2400 mm</span></div>
+    <div><b>Sàn</b><span>${state.floor} · ${floor?floor[1]:""}</span></div>
+    <div><b>Thiết kế</b><span>3 vách · trần âm · cửa mở</span></div>
+  `;
+}
+
+function openSection(section,button){
+  document.querySelectorAll(".rail-item").forEach(x=>x.classList.remove("active"));
+  if(button) button.classList.add("active");
+
+  if(section==="cabin") return renderCabinSection();
+  if(section==="floor") return renderFloorSection();
 
   toast("Mục này sẽ được mở ở bước tiếp theo");
-  return true;
 }
 
-function bindRailNavigation() {
-  // Event delegation + capture: hoạt động ổn định trên Safari/iPad,
-  // kể cả khi panel phía dưới được thay thế bằng innerHTML.
-  const handleRail = event => {
-    const target = event.target.closest ? event.target.closest(".rail-item") : null;
-    if (!target) return;
+function bindRail(){
+  const handler=e=>{
+    const button=e.target.closest?.(".rail-item");
+    if(!button) return;
+    if(e.type==="touchend") e.preventDefault();
+    openSection(button.dataset.section,button);
+  };
+  document.addEventListener("click",handler,true);
+  document.addEventListener("touchend",handler,{capture:true,passive:false});
+}
 
-    if (event.type === "touchend") event.preventDefault();
+function bindViewerControls(){
+  const left=$("rotateLeft");
+  const right=$("rotateRight");
+  const door=$("doorToggle");
 
-    const section = target.getAttribute("data-section");
-    if (!section) return;
-
-    openSection(section, target);
+  if(left) left.onclick=()=>{
+    state.view=state.view==="right"?"front":"left";
+    applyCamera();
+    toast("Góc nhìn");
   };
 
-  document.addEventListener("click", handleRail, true);
-  document.addEventListener("touchend", handleRail, {capture:true, passive:false});
-}
+  if(right) right.onclick=()=>{
+    state.view=state.view==="left"?"front":"right";
+    applyCamera();
+    toast("Góc nhìn");
+  };
 
-window.__openFloor = () => {
-  const button = document.querySelector('.rail-item[data-section="floor"]');
-  if (button) openSection("floor", button);
-};
+  if(door) door.onclick=()=>{
+    state.doorOpen=true;
+    toast("Mặt trước đang mở");
+  };
 
-renderCabinSection();
-updateSummary();
-bindControls();
-bindRailNavigation();
-
-
-try {
-  setup3D();
-} catch (error) {
-  console.error("3D initialization error:",error);
-  loading.textContent = "Lỗi khởi tạo 3D";
-  loading.style.display = "block";
-}
-
-(async () => {
-  try {
-    const { initializeApp } =
-      await import("https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js");
-
-    const { getFirestore } =
-      await import("https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js");
-
-    const app = initializeApp({
-      apiKey:"AIzaSyATAShAE4dBaU5fPAE1l_5sTe7WaUPumDA",
-      authDomain:"elevator-configurator-ac760.firebaseapp.com",
-      projectId:"elevator-configurator-ac760",
-      storageBucket:"elevator-configurator-ac760.firebasestorage.app",
-      messagingSenderId:"509625508976",
-      appId:"1:509625508976:web:cda6aecd0d06f069f040b5"
+  document.querySelectorAll(".view-card").forEach(b=>{
+    b.addEventListener("click",()=>{
+      document.querySelectorAll(".view-card").forEach(x=>x.classList.remove("active"));
+      b.classList.add("active");
+      state.view=b.dataset.view||"front";
+      applyCamera();
     });
+  });
+}
 
-    getFirestore(app);
-  } catch (error) {
-    console.warn("Firebase optional:",error);
+function bindActions(){
+  const map={
+    saveBtn:"Đã lưu cấu hình mẫu",
+    quoteBtn:"Demo: yêu cầu báo giá sẵn sàng",
+    imageBtn:"Demo: xuất hình ảnh",
+    shareBtn:"Demo: chia sẻ mẫu"
+  };
+  Object.entries(map).forEach(([id,msg])=>{
+    const b=$(id);
+    if(b) b.onclick=()=>toast(msg);
+  });
+}
+
+function addFloorThumbStyles(){
+  const style=document.createElement("style");
+  style.textContent=`
+    .floor-choice-S01{background:linear-gradient(135deg,#17181a,#46484b)!important}
+    .floor-choice-S02{background:linear-gradient(135deg,#656b70,#b9bec1)!important}
+    .floor-choice-S03{background:linear-gradient(135deg,#eee8dc,#c9c0b4)!important}
+    .floor-choice-S04{background:linear-gradient(135deg,#2b2725,#62564e)!important}
+    .floor-choice-S05{background:linear-gradient(135deg,#a99064,#d2bd91)!important}
+    .floor-choice-S06{background:repeating-linear-gradient(90deg,#6d452b 0 34px,#96613a 34px 68px)!important}
+  `;
+  document.head.appendChild(style);
+}
+
+function init(){
+  addFloorThumbStyles();
+  renderCabinSection();
+  updateSummary();
+  bindRail();
+  bindViewerControls();
+  bindActions();
+
+  try{
+    setup3D();
+  }catch(error){
+    console.error("3D initialization error:",error);
+    const loading=$("loading");
+    if(loading){
+      loading.textContent="Lỗi khởi tạo 3D";
+      loading.style.display="block";
+    }
   }
-})();
+}
+
+init();
