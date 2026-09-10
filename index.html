@@ -2,95 +2,95 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7f7">
   <title>Elevator Configurator</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <div id="app">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">3D ELEVATOR CONFIGURATOR</div>
-        <h1>Elevator Configurator</h1>
-      </div>
-      <div class="status" id="firebaseStatus">Đang khởi tạo…</div>
-    </header>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">3D ELEVATOR CONFIGURATOR</div>
+      <h1>Elevator Configurator</h1>
+    </div>
+    <div id="statusBadge" class="status-badge">Đang khởi tạo...</div>
+  </header>
 
-    <main class="layout">
-      <section class="viewer-card">
-        <div id="viewer"></div>
-        <div class="viewer-help">
-          <span>Kéo để xoay</span>
-          <span>Cuộn / pinch để zoom</span>
-          <span>2 ngón tay để pan</span>
-        </div>
-        <div class="loading" id="loading">
+  <main class="app-shell">
+    <section class="viewer-card">
+      <div id="viewer">
+        <div id="loading" class="loading-overlay">
           <div class="spinner"></div>
-          <span id="loadingText">Đang khởi tạo 3D…</span>
+          <div id="loadingText">Đang khởi tạo 3D...</div>
         </div>
-      </section>
+        <div class="viewer-help">Kéo để xoay · Cuộn/pinch để zoom</div>
+      </div>
+    </section>
 
-      <aside class="control-panel">
-        <section class="panel-section">
-          <div class="section-title">01 · CABIN</div>
-          <div class="choice-grid cabin-grid" id="cabinChoices"></div>
-        </section>
+    <section class="config-section">
+      <div class="section-title">01 · CABIN</div>
+      <div id="cabinOptions" class="option-grid"></div>
+    </section>
 
-        <section class="panel-section">
-          <div class="section-title">02 · 3 WALLS</div>
+    <section class="config-section">
+      <div class="section-title">02 · 3 WALLS</div>
 
-          <div class="mode-tabs" id="wallModes">
-            <button class="mode-btn active" data-mode="same">Đồng bộ</button>
-            <button class="mode-btn" data-mode="independent">3 vách riêng</button>
-            <button class="mode-btn" data-mode="pattern">Ăn mòn hoa văn</button>
-          </div>
+      <div class="mode-grid">
+        <button class="mode-btn active" data-wall-mode="same">Đồng bộ</button>
+        <button class="mode-btn" data-wall-mode="independent">3 vách riêng</button>
+        <button class="mode-btn" data-wall-mode="pattern">Ăn mòn hoa văn</button>
+      </div>
 
-          <div class="wall-summary">
-            <div><span>Vách trái</span><strong id="wallLeftLabel">I01</strong></div>
-            <div><span>Vách sau</span><strong id="wallBackLabel">I01</strong></div>
-            <div><span>Vách phải</span><strong id="wallRightLabel">I01</strong></div>
-          </div>
+      <div class="wall-summary-grid">
+        <div class="wall-summary"><span>Vách trái</span><strong id="leftSummary">I01</strong></div>
+        <div class="wall-summary"><span>Vách sau</span><strong id="backSummary">I01</strong></div>
+        <div class="wall-summary"><span>Vách phải</span><strong id="rightSummary">I01</strong></div>
+      </div>
 
-          <div id="wallChoices" class="choice-grid"></div>
-        </section>
+      <div id="wallControls" class="wall-controls"></div>
+      <div id="wallMaterialOptions" class="option-grid material-grid"></div>
+    </section>
 
-        <section class="panel-section">
-          <div class="section-title">03 · FLOOR</div>
-          <div class="choice-grid" id="floorChoices"></div>
-        </section>
+    <section class="config-section">
+      <div class="section-title">03 · FLOOR</div>
+      <div id="floorOptions" class="option-grid material-grid"></div>
+    </section>
 
-        <section class="panel-section">
-          <div class="section-title">04 · CEILING</div>
-          <div class="choice-grid" id="ceilingChoices"></div>
-        </section>
+    <section class="config-section">
+      <div class="section-title">04 · CEILING</div>
+      <div id="ceilingOptions" class="option-grid material-grid"></div>
+    </section>
 
-        <section class="panel-section">
-          <div class="section-title">05 · DOOR</div>
-          <div class="choice-grid" id="doorChoices"></div>
-        </section>
+    <section class="config-section">
+      <div class="section-title">05 · DOOR</div>
+      <div id="doorOptions" class="option-grid material-grid"></div>
+    </section>
 
-        <section class="panel-section">
-          <div class="section-title">06 · HANDRAIL</div>
-          <div class="choice-grid" id="handrailChoices"></div>
-        </section>
+    <section class="config-section">
+      <div class="section-title">06 · HANDRAIL</div>
+      <div id="handrailOptions" class="option-grid material-grid"></div>
+    </section>
 
-        <section class="panel-section">
-          <div class="section-title">07 · COP</div>
-          <div class="choice-grid" id="copChoices"></div>
-        </section>
+    <section class="config-section">
+      <div class="section-title">07 · COP</div>
+      <div id="copOptions" class="option-grid material-grid"></div>
+    </section>
 
-        <section class="panel-section">
-          <div class="section-title">08 · LIGHTING</div>
-          <div class="choice-grid" id="lightingChoices"></div>
-        </section>
+    <section class="config-section">
+      <div class="section-title">08 · LIGHTING</div>
+      <div id="lightingOptions" class="option-grid material-grid"></div>
+    </section>
 
-        <section class="panel-section summary-section">
-          <div class="section-title">CONFIGURATION</div>
-          <pre id="configOutput"></pre>
-        </section>
-      </aside>
-    </main>
-  </div>
+    <section class="config-section summary-section">
+      <div class="section-title">CONFIGURATION</div>
+      <pre id="configSummary"></pre>
+      <div class="action-row">
+        <button id="resetBtn" class="secondary-btn">Khôi phục mặc định</button>
+        <button id="saveBtn" class="primary-btn">Lưu cấu hình</button>
+      </div>
+      <div id="saveStatus" class="save-status"></div>
+    </section>
+  </main>
 
   <script type="module" src="./app.js"></script>
 </body>
