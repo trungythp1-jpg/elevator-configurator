@@ -1,514 +1,299 @@
-/* ELEVATOR CONFIGURATOR V7
-   Fixed cabin preview: 1400W x 1200D x 2400H mm
-V8 framing: camera farther back to show full floor and ceiling
-   No rotate / no zoom / no pan.
-   3D startup is independent from Firebase and optional UI events.
-*/
-
 import * as THREE from "three";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+import { firebaseConfig } from "./firebase/firebase-config.js";
 
-const LOCAL_MANIFEST_FALLBACK = {
-  cabin: [
-    { code: "GV-001", name: "Champagne Classic" },
-    { code: "GV-002", name: "Titanium Modern" },
-    { code: "GV-003", name: "Dark Luxury" }
+const viewer = document.querySelector("#viewer");
+const loading = document.querySelector("#loading");
+const cloudStatus = document.querySelector("#cloudStatus");
+
+const fallbackManifest = {
+  cabin:[
+    {code:"GV-001",file:"cabin/GV-001.glb",name:"Champagne Classic"},
+    {code:"GV-002",file:"cabin/GV-002.glb",name:"Titanium Modern"},
+    {code:"GV-003",file:"cabin/GV-003.glb",name:"Dark Luxury"}
   ],
-  walls: [
-    { code: "I01", name: "Inox Champagne Hairline", color: "champagne", finish: "hairline" },
-    { code: "I02", name: "Inox Titanium Mirror", color: "gold", finish: "mirror" },
-    { code: "I03", name: "Inox Silver Hairline", color: "silver", finish: "hairline" },
-    { code: "I04", name: "Inox Black Mirror", color: "black", finish: "mirror" },
-    { code: "I05", name: "Inox Rose Gold", color: "rose", finish: "mirror" },
-    { code: "I06", name: "Inox Bronze", color: "bronze", finish: "hairline" },
-    { code: "I07", name: "Inox Blue Titanium", color: "blue", finish: "mirror" },
-    { code: "I08", name: "Inox Pearl", color: "pearl", finish: "hairline" }
-  ],
-  floor: Array.from({length:6}, (_,i)=>({code:`S0${i+1}`,name:`Floor ${String(i+1).padStart(2,"0")}`})),
-  ceiling: Array.from({length:6}, (_,i)=>({code:`T0${i+1}`,name:`Ceiling ${String(i+1).padStart(2,"0")}`})),
-  doors: Array.from({length:6}, (_,i)=>({code:`C0${i+1}`,name:`Door ${String(i+1).padStart(2,"0")}`})),
-  handrail: Array.from({length:4}, (_,i)=>({code:`H0${i+1}`,name:`Handrail ${String(i+1).padStart(2,"0")}`})),
-  cop: Array.from({length:4}, (_,i)=>({code:`P0${i+1}`,name:`COP ${String(i+1).padStart(2,"0")}`})),
-  lighting: Array.from({length:4}, (_,i)=>({code:`L0${i+1}`,name:`Lighting ${String(i+1).padStart(2,"0")}`}))
+  walls:[1,2,3,4,5,6,7,8].map((n)=>({code:`I0${n}`,file:`walls/I0${n}.png`,name:["Inox Champagne Hairline","Inox Titanium Mirror","Inox Silver Hairline","Inox Black Mirror","Inox Rose Hairline","Inox Bronze Mirror","Inox Deep Blue Hairline","Inox Pearl Etched"][n-1]})),
+  floor:[1,2,3,4,5,6].map((n)=>({code:`S0${n}`,file:`floor/S0${n}.png`,name:["Granite Light","Granite Dark","Black Stone","Warm Stone","Grey Ceramic","Ivory Ceramic"][n-1]})),
+  ceiling:[1,2,3,4,5,6].map((n)=>({code:`T0${n}`,file:`ceiling/T0${n}.png`,name:["Silver Ceiling","Black Ceiling","Champagne Ceiling","White Ceiling","Mirror Ceiling","Star Grid Ceiling"][n-1]})),
+  doors:[1,2,3,4,5,6].map((n)=>({code:`C0${n}`,file:`doors/C0${n}.png`,name:["Two-panel Silver","Two-panel Black","Two-panel Champagne","Center-opening Bronze","Glass Dark","Glass Smoke"][n-1]})),
+  handrail:[1,2,3,4].map((n)=>({code:`H0${n}`,file:`handrail/H0${n}.png`,name:["Round Silver","Round Black","Round Champagne","Square Bronze"][n-1]})),
+  cop:[1,2,3,4].map((n)=>({code:`P0${n}`,file:`cop/P0${n}.png`,name:["Stainless COP","Black Glass COP","Champagne COP","Dark Bronze COP"][n-1]})),
+  lighting:[1,2,3,4].map((n)=>({code:`L0${n}`,file:`lighting/L0${n}.png`,name:["Warm 3000K","Neutral 4000K","Cool 6000K","Perimeter LED"][n-1]}))
 };
+
+let manifest = fallbackManifest;
+try {
+  const r = await fetch("./asset-manifest.json",{cache:"no-store"});
+  if(r.ok) manifest = await r.json();
+} catch(e) {}
 
 const state = {
-  cabin: 0,
-  wallMode: "same",
-  wallTarget: "left",
-  walls: { left: 0, back: 0, right: 0 },
-  floor: 0,
-  ceiling: 0,
-  door: 0,
-  handrail: 0,
-  cop: 0,
-  lighting: 0
+  cabin:0,
+  wallMode:"same",
+  wallTarget:"left",
+  walls:{left:0,back:0,right:0},
+  floor:0,ceiling:0,door:0,handrail:0,cop:0,lighting:0
 };
+let library = {...manifest};
 
-let manifest = LOCAL_MANIFEST_FALLBACK;
-let library = cloneLibrary(LOCAL_MANIFEST_FALLBACK);
-let scene = null;
-let camera = null;
-let renderer = null;
-let viewer = null;
-let cabinGroup = null;
-let fillLight = null;
-let initialized = false;
-let textureLoader = null;
+// ---------------------------------------------------------
+// 3D: FIXED FRONT VIEW — 1400 x 1200 x 2400 mm
+// ---------------------------------------------------------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf3f6f4);
+const camera = new THREE.PerspectiveCamera(39,1,0.05,100);
+const renderer = new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.7));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setClearColor(0xf3f6f4,1);
+viewer.appendChild(renderer.domElement);
+
+// No OrbitControls: cabin is intentionally fixed.
+const ambient = new THREE.HemisphereLight(0xffffff,0x7f8b86,2.0); scene.add(ambient);
+const key = new THREE.DirectionalLight(0xffffff,2.6); key.position.set(2.5,4.5,4); scene.add(key);
+const fill = new THREE.PointLight(0xffffff,18,8); fill.position.set(0,1.8,0.4); scene.add(fill);
+const frontFill = new THREE.DirectionalLight(0xffffff,1.1); frontFill.position.set(0,2.2,5); scene.add(frontFill);
+
+const cabinGroup = new THREE.Group();
+cabinGroup.position.y = 0;
+scene.add(cabinGroup);
 const textureCache = new Map();
+const materialCache = new Map();
+const meshes = {};
 
-const palette = {
-  I01: 0xc4a57b, I02: 0xb68d4f, I03: 0xaeb5ba, I04: 0x272b30,
-  I05: 0xb87972, I06: 0x75553a, I07: 0x405a72, I08: 0xc9c6bd,
-  S01: 0x9b9b94, S02: 0x4a4b4d, S03: 0x222426, S04: 0x796957,
-  S05: 0x72777b, S06: 0xc8c0ae,
-  T01: 0xa7adb2, T02: 0x22262a, T03: 0xa68b61, T04: 0xd9d9d7,
-  T05: 0x747a7f, T06: 0x555a5f,
-  C01: 0x9aa1a6, C02: 0x282c31, C03: 0xb4976a, C04: 0x654a37,
-  C05: 0x171b1f, C06: 0x4b555d,
-  H01: 0xb4b7b9, H02: 0x282b2d, H03: 0xb18e5b, H04: 0x654934,
-  P01: 0x8d9295, P02: 0x1e2226, P03: 0xb38e59, P04: 0x4d3628
+function texture(path){
+  if(textureCache.has(path)) return textureCache.get(path);
+  const t = new THREE.TextureLoader().load(path);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  textureCache.set(path,t);
+  return t;
+}
+
+const palettes={
+  I01:0xbc9d6c,I02:0x7a848f,I03:0xb0b7be,I04:0x2a2e34,I05:0xa6766f,I06:0x67492f,I07:0x30455b,I08:0xc7c5b8,
+  S01:0xa6a6a0,S02:0x424446,S03:0x1c1e20,S04:0x7d6c5b,S05:0x7e8488,S06:0xcdc7b9,
+  T01:0xa4aab0,T02:0x202327,T03:0xaf9465,T04:0xdcdddd,T05:0x73787d,T06:0x52565b,
+  C01:0x9ea4aa,C02:0x282b30,C03:0xb49669,C04:0x694e38,C05:0x1a2024,C06:0x4e5860,
+  H01:0xaaafb5,H02:0x24262a,H03:0xaf9160,H04:0x644832,
+  P01:0x878e94,P02:0x1b1f23,P03:0xae9164,P04:0x4b3428
 };
 
-function $(selector) { return document.querySelector(selector); }
-function cloneLibrary(value) { return JSON.parse(JSON.stringify(value)); }
-function setLoading(show, text="Đang khởi tạo 3D…", detail="Đang chuẩn bị cabin") {
-  const el = $("#loading");
-  if (!el) return;
-  el.hidden = !show;
-  $("#loadingText").textContent = text;
-  $("#loadingDetail").textContent = detail;
+function asset(cat,idx){return library[cat][idx % library[cat].length]}
+function genericMaterial(item,cat,rough=.5){
+  const key=`${cat}:${item.code}:${rough}`;
+  if(materialCache.has(key)) return materialCache.get(key);
+  const m=new THREE.MeshStandardMaterial({
+    color:palettes[item.code]||0x888888,
+    map:texture(`./assets/${cat}/${item.code}.png`),
+    roughness:rough,
+    metalness:cat==="floor"?.15:.72
+  });
+  materialCache.set(key,m); return m;
 }
-function showError(error) {
-  const message = error?.message || String(error || "Unknown error");
-  $("#errorText").textContent = message;
-  $("#errorBox").hidden = false;
-  setLoading(false);
-  console.error("[Elevator Configurator V6]", error);
+function box(name,size,pos,material){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(...size),material);
+  m.position.set(...pos); m.name=name; cabinGroup.add(m); meshes[name]=m; return m;
 }
-function hideError() { $("#errorBox").hidden = true; }
-function asset(cat, index) {
-  const list = library[cat] || [];
-  return list[index % Math.max(list.length, 1)] || {code:""};
-}
-function assetPath(cat, code) { return `./assets/${cat}/${code}.png`; }
-
-async function loadManifest() {
-  try {
-    const response = await fetch(`./asset-manifest.json?v=3`, { cache: "no-store" });
-    if (!response.ok) throw new Error(`asset-manifest.json HTTP ${response.status}`);
-    const data = await response.json();
-    manifest = {
-      ...LOCAL_MANIFEST_FALLBACK,
-      ...data,
-      cabin: Array.isArray(data.cabin) && data.cabin.length ? data.cabin : LOCAL_MANIFEST_FALLBACK.cabin
-    };
-    library = {
-      ...cloneLibrary(LOCAL_MANIFEST_FALLBACK),
-      ...data
-    };
-  } catch (error) {
-    console.warn("Using built-in asset manifest fallback:", error);
-    manifest = LOCAL_MANIFEST_FALLBACK;
-    library = cloneLibrary(LOCAL_MANIFEST_FALLBACK);
+function clearCabin(){
+  while(cabinGroup.children.length){
+    const child=cabinGroup.children.pop();
+    child.geometry?.dispose();
   }
+  for(const k of Object.keys(meshes)) delete meshes[k];
 }
-
-function makeTexture(path) {
-  if (textureCache.has(path)) return textureCache.get(path);
-  const texture = textureLoader.load(
-    path,
-    undefined,
-    undefined,
-    () => console.warn("Texture unavailable:", path)
-  );
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.anisotropy = Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 1, 4);
-  textureCache.set(path, texture);
-  return texture;
+function wallMaterial(zone){
+  const i=state.walls[zone];
+  return genericMaterial(asset("walls",i),"walls",.42);
 }
+function floorMaterial(){return genericMaterial(asset("floor",state.floor),"floor",.72)}
+function ceilingMaterial(){return genericMaterial(asset("ceiling",state.ceiling),"ceiling",.38)}
+function doorMaterial(){return genericMaterial(asset("doors",state.door),"doors",.28)}
 
-function materialFor(cat, item, roughness=0.5, metalness=0.5) {
-  const code = item?.code || "";
-  const path = assetPath(cat, code);
-  const material = new THREE.MeshStandardMaterial({
-    color: palette[code] || 0x888888,
-    map: makeTexture(path),
-    roughness,
-    metalness
-  });
-  return material;
-}
+function rebuildCabin(){
+  clearCabin();
+  // Real target dimensions represented as 1.4 x 1.2 x 2.4 scene units.
+  const W=1.40,D=1.20,H=2.40,t=.045;
+  const floorT=.055;
 
-function initThree() {
-  viewer = $("#viewer");
-  if (!viewer) throw new Error("Không tìm thấy vùng viewer.");
+  box("floor",[W,D,floorT],[0,0,floorT/2],floorMaterial());
+  box("back",[W,t,H],[0,D/2-t/2,H/2],wallMaterial("back"));
+  box("left",[t,D,H],[-W/2+t/2,0,H/2],wallMaterial("left"));
+  box("right",[t,D,H],[W/2-t/2,0,H/2],wallMaterial("right"));
+  box("ceiling",[W,D,t],[0,0,H-t/2],ceilingMaterial());
 
-  const testCanvas = document.createElement("canvas");
-  const gl = testCanvas.getContext("webgl2") || testCanvas.getContext("webgl");
-  if (!gl) throw new Error("Thiết bị hoặc trình duyệt không hỗ trợ WebGL.");
-
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf0f3f2);
-
-  camera = new THREE.PerspectiveCamera(42, 1, 0.05, 100);
-  // Fixed wider framing: move the camera farther back so the full floor and ceiling stay visible.
-  camera.position.set(0, 1.28, -4.30);
-  camera.lookAt(0, 1.18, 0.55);
-
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.setClearColor(0xf0f3f2, 1);
-  renderer.domElement.setAttribute("aria-label", "3D elevator cabin preview");
-  viewer.prepend(renderer.domElement);
-
-  textureLoader = new THREE.TextureLoader();
-
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xb9c0c4, 2.1));
-  const key = new THREE.DirectionalLight(0xffffff, 2.5);
-  key.position.set(3.5, 4.5, 3);
-  scene.add(key);
-  const rim = new THREE.DirectionalLight(0xddeeff, 1.4);
-  rim.position.set(-3, 3, -2);
-  scene.add(rim);
-  fillLight = new THREE.PointLight(0xffffff, 18, 7);
-  fillLight.position.set(0, 0.0, 1.95);
-  scene.add(fillLight);
-
-  cabinGroup = new THREE.Group();
-  scene.add(cabinGroup);
-
-  renderer.domElement.addEventListener("webglcontextlost", event => {
-    event.preventDefault();
-    showError(new Error("WebGL context đã bị mất. Hãy tải lại trang để khởi tạo lại 3D."));
-  });
-
-  window.addEventListener("resize", resize, { passive: true });
-  resize();
-  rebuildCabin();
-  renderAllChoices();
-  initialized = true;
-  setLoading(false);
-}
-
-function addBox(name, size, position, material) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
-  mesh.name = name;
-  mesh.position.set(...position);
-  cabinGroup.add(mesh);
-  return mesh;
-}
-
-function wallMaterial(zone) {
-  const index = state.walls[zone];
-  return materialFor("walls", asset("walls", index), 0.38, 0.72);
-}
-function floorMaterial() { return materialFor("floor", asset("floor", state.floor), 0.72, 0.18); }
-function ceilingMaterial() { return materialFor("ceiling", asset("ceiling", state.ceiling), 0.4, 0.65); }
-function doorMaterial() { return materialFor("doors", asset("doors", state.door), 0.28, 0.75); }
-
-function disposeObject(root) {
-  root.traverse(obj => {
-    if (obj.geometry) obj.geometry.dispose();
-    if (obj.material) {
-      const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
-      materials.forEach(m => m.dispose());
-    }
-  });
-}
-
-function rebuildCabin() {
-  if (!cabinGroup) return;
-  while (cabinGroup.children.length) {
-    const child = cabinGroup.children.pop();
-    disposeObject(child);
-  }
-
-  // Real cabin reference dimensions: W 1400 mm × D 1200 mm × H 2400 mm.
-  // Three.js units are metres.
-  const W = 1.40, D = 1.20, H = 2.40, t = 0.045;
-  addBox("floor", [W, D, t], [0, 0, t / 2], floorMaterial());
-  addBox("back", [W, t, H], [0, D / 2 - t / 2, H / 2], wallMaterial("back"));
-  addBox("left", [t, D, H], [-W / 2 + t / 2, 0, H / 2], wallMaterial("left"));
-  addBox("right", [t, D, H], [W / 2 - t / 2, 0, H / 2], wallMaterial("right"));
-  addBox("ceiling", [W, D, t], [0, 0, H - t / 2], ceilingMaterial());
-
-  addBox("topTrim", [W, 0.04, 0.10], [0, D / 2 - 0.05, H - 0.10], ceilingMaterial());
+  // Open front — no door in the preview, matching the approved reference view.
+  addFrontFrame();
   addHandrail();
   addCop();
+  addCeilingLights();
   applyLighting();
 }
 
-function addHandrail() {
-  const item = asset("handrail", state.handrail);
-  const material = materialFor("handrail", item, 0.23, 0.82);
-  const geo = new THREE.CylinderGeometry(0.028, 0.028, 1.25, 24);
-  for (const [x, y, z] of [[-0.48, 0.16, 1.18], [0.48, 0.16, 1.18]]) {
-    const rail = new THREE.Mesh(geo, material);
-    rail.rotation.z = Math.PI / 2;
-    rail.position.set(x, y, z);
-    cabinGroup.add(rail);
+function addFrontFrame(){
+  const frameMat=genericMaterial(asset("doors",state.door),"doors",.24);
+  const side=.055;
+  box("frontLeftFrame",[side,.055,H],[-W2(),-D/2+.03,H/2],frameMat);
+  box("frontRightFrame",[side,.055,H],[W2(),-D/2+.03,H/2],frameMat);
+  box("frontTopFrame",[W,.055,side],[0,-D/2+.03,H-side/2],frameMat);
+  function W2(){return 1.40/2-side/2}
+}
+function addHandrail(){
+  const m=genericMaterial(asset("handrail",state.handrail),"handrail",.25);
+  const geo=new THREE.CylinderGeometry(.026,.026,.92,24);
+  for(const x of [-.50,.50]){
+    const h=new THREE.Mesh(geo,m); h.rotation.z=Math.PI/2; h.position.set(x,-.48,1.18); cabinGroup.add(h);
   }
 }
-
-function addCop() {
-  const item = asset("cop", state.cop);
-  const material = materialFor("cop", item, 0.3, 0.7);
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.055, 0.78), material);
-  panel.position.set(0.56, -0.36, 1.30);
-  panel.rotation.x = 0.04;
-  cabinGroup.add(panel);
-
-  const screen = new THREE.Mesh(
-    new THREE.BoxGeometry(0.20, 0.012, 0.12),
-    new THREE.MeshStandardMaterial({ color: 0x152329, emissive: 0x173b44, emissiveIntensity: 0.65, roughness: 0.2, metalness: 0.3 })
-  );
-  screen.position.set(0.56, -0.33, 1.47);
-  screen.rotation.x = 0.04;
-  cabinGroup.add(screen);
+function addCop(){
+  const m=genericMaterial(asset("cop",state.cop),"cop",.3);
+  const p=new THREE.Mesh(new THREE.BoxGeometry(.26,.045,.58),m);
+  p.position.set(.49,-.515,1.22); cabinGroup.add(p);
+}
+function addCeilingLights(){
+  const lightMat=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:1.8});
+  const geo=new THREE.CylinderGeometry(.055,.055,.012,32);
+  [[-.48,-.38,2.34],[.48,-.38,2.34],[-.48,.30,2.34],[.48,.30,2.34]].forEach(([x,z,y])=>{
+    const l=new THREE.Mesh(geo,lightMat);l.rotation.x=Math.PI/2;l.position.set(x,z,y);cabinGroup.add(l);
+  });
+}
+function applyLighting(){
+  const colors={L01:0xffd07a,L02:0xfff1d6,L03:0xbfe2ff,L04:0xffffff};
+  const code=asset("lighting",state.lighting).code;
+  fill.color.setHex(colors[code]||0xffffff);
+  fill.intensity=code==="L04"?24:18;
 }
 
-function applyLighting() {
-  const item = asset("lighting", state.lighting);
-  const colors = { L01: 0xffd07a, L02: 0xfff1d6, L03: 0xbfe2ff, L04: 0xffffff };
-  if (fillLight) {
-    fillLight.color.setHex(colors[item.code] || 0xffffff);
-    fillLight.intensity = 18;
-  }
-}
-
-function resetCamera() {
-  if (!camera) return;
-  camera.position.set(0, 1.28, -4.30);
-  camera.lookAt(0, 1.18, 0.55);
-}
-
-function resize() {
-  if (!renderer || !camera || !viewer) return;
-  const rect = viewer.getBoundingClientRect();
-  const width = Math.max(1, rect.width);
-  const height = Math.max(1, rect.height);
-  renderer.setSize(width, height, false);
-  camera.aspect = width / height;
+function frameCamera(){
+  const r=viewer.getBoundingClientRect();
+  if(!r.width||!r.height)return;
+  renderer.setSize(r.width,r.height,false);
+  camera.aspect=r.width/r.height;
   camera.updateProjectionMatrix();
+  // Higher and farther so the complete floor + ceiling remain visible.
+  const compact=Math.min(r.width,r.height);
+  const portrait=r.height>r.width*1.15;
+  camera.position.set(portrait?1.95:1.72, portrait?2.28:2.18, portrait?4.75:4.35);
+  camera.lookAt(0,1.18,0.02);
 }
 
-function renderCabins() {
-  const el = $("#cabinChoices");
-  el.innerHTML = "";
-  (manifest.cabin || []).forEach((item, index) => {
-    const card = document.createElement("div");
-    card.className = `choice ${index === state.cabin ? "active" : ""}`;
-    card.innerHTML = `<div class="cabin-thumb cabin-${index + 1}"><span>${item.code}</span></div><label>${item.code} · ${item.name}</label>`;
-    card.onclick = () => {
-      state.cabin = index;
-      $("#cabinTitle").textContent = `${item.code} · ${item.name}`;
-      rebuildCabin();
-      resetCamera();
-      renderCabins();
-      updateConfig();
-    };
-    el.appendChild(card);
+function showLoading(show){loading.classList.toggle("show",show)}
+
+function renderCabins(){
+  const el=document.querySelector("#cabinChoices");el.innerHTML="";
+  manifest.cabin.forEach((x,i)=>{
+    const d=document.createElement("div");
+    d.className=`choice ${i===state.cabin?"active":""}`;
+    d.innerHTML=`<div class="cabin-thumb" style="background:${i===0?"linear-gradient(120deg,#cdb78f,#f2e7d0)":i===1?"linear-gradient(120deg,#8e969e,#e3e7e9)":"linear-gradient(120deg,#242a2e,#687075)"};height:66px;display:flex;align-items:center;justify-content:center"><span style="border:2px solid #fff9;padding:13px 42px;color:#fff;font-weight:700;font-size:11px;text-shadow:0 1px 3px #0008">${x.code}</span></div><label>${x.code} · ${x.name}</label>`;
+    d.onclick=()=>{state.cabin=i;document.querySelector("#cabinTitle").textContent=`${x.code} · ${x.name}`;renderCabins();updateConfig()};
+    el.appendChild(d);
   });
 }
-
-function renderWalls() {
-  const zones = $("#wallZones");
-  zones.innerHTML = "";
-  const labels = { left: "Vách trái", back: "Vách sau", right: "Vách phải" };
-  Object.entries(labels).forEach(([key, label]) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = `${label} · ${asset("walls", state.walls[key]).code}`;
-    button.className = state.wallTarget === key ? "active" : "";
-    button.onclick = () => {
-      state.wallTarget = key;
-      renderWalls();
-    };
-    zones.appendChild(button);
+function renderWalls(){
+  const zones=document.querySelector("#wallZones");zones.innerHTML="";
+  const labels={left:"Vách trái",back:"Vách sau",right:"Vách phải"};
+  Object.entries(labels).forEach(([key,label])=>{
+    const b=document.createElement("button");b.textContent=`${label} · ${asset("walls",state.walls[key]).code}`;
+    b.className=state.wallTarget===key?"active":"";
+    b.onclick=()=>{state.wallTarget=key;renderWalls()};zones.appendChild(b);
   });
-
-  const swatches = $("#wallMaterials");
-  swatches.innerHTML = "";
-  (library.walls || []).forEach((item, index) => {
-    const swatch = document.createElement("div");
-    const selected = state.wallMode === "same" ? state.walls.left === index : state.walls[state.wallTarget] === index;
-    swatch.className = `swatch ${selected ? "active" : ""}`;
-    swatch.style.backgroundImage = `url("${assetPath("walls", item.code)}")`;
-    swatch.innerHTML = `<small>${item.code}</small>`;
-    swatch.onclick = () => selectWall(index);
-    swatches.appendChild(swatch);
+  const sw=document.querySelector("#wallMaterials");sw.innerHTML="";
+  library.walls.forEach((x,i)=>{
+    const active=(state.wallMode==="same"?state.walls.left:state.walls[state.wallTarget])===i;
+    const b=document.createElement("div");b.className=`swatch ${active?"active":""}`;
+    b.style.backgroundImage=`url("./assets/walls/${x.code}.png")`;
+    b.innerHTML=`<small>${x.code}</small>`;
+    b.onclick=()=>selectWall(i);sw.appendChild(b);
   });
 }
-
-function selectWall(index) {
-  if (state.wallMode === "same" || state.wallMode === "pattern") {
-    state.walls = { left: index, back: index, right: index };
-  } else {
-    state.walls[state.wallTarget] = index;
-  }
-  rebuildCabin();
-  renderWalls();
+function selectWall(i){
+  if(state.wallMode==="same"||state.wallMode==="pattern")state.walls={left:i,back:i,right:i};
+  else state.walls[state.wallTarget]=i;
+  rebuildCabin();renderWalls();updateConfig();
+}
+function renderCards(cat,id){
+  const el=document.querySelector(`#${id}`);el.innerHTML="";
+  library[cat].forEach((x,i)=>{
+    const key=cat==="doors"?"door":cat;
+    const d=document.createElement("div");d.className=`card ${state[key]===i?"active":""}`;
+    d.innerHTML=`<img src="./assets/${cat}/${x.code}.png" alt=""><label>${x.code} · ${x.name}</label>`;
+    d.onclick=()=>{state[key]=i;rebuildCabin();renderCards(cat,id);updateConfig()};el.appendChild(d);
+  });
+}
+function renderAll(){
+  renderCabins();renderWalls();
+  renderCards("floor","floorChoices");renderCards("ceiling","ceilingChoices");renderCards("doors","doorChoices");renderCards("handrail","handrailChoices");renderCards("cop","copChoices");renderCards("lighting","lightingChoices");
   updateConfig();
 }
-
-function renderCards(cat, id, stateKey = cat === "doors" ? "door" : cat) {
-  const el = $("#" + id);
-  el.innerHTML = "";
-  (library[cat] || []).forEach((item, index) => {
-    const card = document.createElement("div");
-    card.className = `card ${state[stateKey] === index ? "active" : ""}`;
-    card.innerHTML = `<img loading="lazy" src="${assetPath(cat, item.code)}" alt="${item.name || item.code}"><label>${item.code} · ${item.name || item.code}</label>`;
-    card.onclick = () => {
-      state[stateKey] = index;
-      rebuildCabin();
-      renderCards(cat, id, stateKey);
-      updateConfig();
-    };
-    el.appendChild(card);
-  });
+function updateConfig(){
+  document.querySelector("#modeTitle").textContent=`3 Walls · ${state.wallMode==="same"?"Same Material":state.wallMode==="independent"?"Independent":"Etched Pattern"}`;
+  document.querySelector("#configPreview").textContent=JSON.stringify({
+    cabin:manifest.cabin[state.cabin].code,
+    dimensions:"1400 × 1200 × 2400 mm",
+    preview:"fixed / front open",
+    walls:{left:asset("walls",state.walls.left).code,back:asset("walls",state.walls.back).code,right:asset("walls",state.walls.right).code},
+    floor:asset("floor",state.floor).code,ceiling:asset("ceiling",state.ceiling).code,
+    door:asset("doors",state.door).code,handrail:asset("handrail",state.handrail).code,
+    cop:asset("cop",state.cop).code,lighting:asset("lighting",state.lighting).code
+  },null,2);
 }
 
-function renderAllChoices() {
-  renderCabins();
-  renderWalls();
-  renderCards("floor", "floorChoices");
-  renderCards("ceiling", "ceilingChoices");
-  renderCards("doors", "doorChoices", "door");
-  renderCards("handrail", "handrailChoices");
-  renderCards("cop", "copChoices");
-  renderCards("lighting", "lightingChoices");
-  updateConfig();
-}
+document.querySelectorAll("[data-wall-mode]").forEach(b=>b.onclick=()=>{
+  state.wallMode=b.dataset.wallMode;
+  document.querySelectorAll("[data-wall-mode]").forEach(x=>x.classList.toggle("active",x===b));
+  renderWalls();updateConfig();rebuildCabin();
+});
 
-function updateConfig() {
-  const cabin = manifest.cabin?.[state.cabin] || LOCAL_MANIFEST_FALLBACK.cabin[0];
-  $("#modeTitle").textContent = `3 Walls · ${state.wallMode === "same" ? "Same Material" : state.wallMode === "independent" ? "Independent" : "Etched Pattern"}`;
-  $("#configPreview").textContent = JSON.stringify({
-    cabin: cabin.code,
-    dimensions: "1400 × 1200 × 2400 mm",
-    walls: {
-      left: asset("walls", state.walls.left).code,
-      back: asset("walls", state.walls.back).code,
-      right: asset("walls", state.walls.right).code
-    },
-    floor: asset("floor", state.floor).code,
-    ceiling: asset("ceiling", state.ceiling).code,
-    door: asset("doors", state.door).code,
-    handrail: asset("handrail", state.handrail).code,
-    cop: asset("cop", state.cop).code,
-    lighting: asset("lighting", state.lighting).code
-  }, null, 2);
-}
+document.querySelector("#resetBtn").onclick=()=>{
+  Object.assign(state,{cabin:0,wallMode:"same",wallTarget:"left",walls:{left:0,back:0,right:0},floor:0,ceiling:0,door:0,handrail:0,cop:0,lighting:0});
+  document.querySelectorAll("[data-wall-mode]").forEach((x,i)=>x.classList.toggle("active",i===0));
+  document.querySelector("#cabinTitle").textContent=`${manifest.cabin[0].code} · ${manifest.cabin[0].name}`;
+  rebuildCabin();renderAll();
+};
 
-function setupEvents() {
-  // V7: event wiring is optional and must never block 3D startup.
-
-  document.querySelectorAll("[data-wall-mode]").forEach(button => {
-    button.addEventListener("click", () => {
-      state.wallMode = button.dataset.wallMode;
-      document.querySelectorAll("[data-wall-mode]").forEach(x => x.classList.toggle("active", x === button));
-      renderWalls();
-      updateConfig();
-      rebuildCabin();
-    });
-  });
-
-  $("#resetBtn").addEventListener("click", () => {
-    Object.assign(state, {
-      cabin: 0,
-      wallMode: "same",
-      wallTarget: "left",
-      walls: { left: 0, back: 0, right: 0 },
-      floor: 0,
-      ceiling: 0,
-      door: 0,
-      handrail: 0,
-      cop: 0,
-      lighting: 0
-    });
-    document.querySelectorAll("[data-wall-mode]").forEach((x, i) => x.classList.toggle("active", i === 0));
-    $("#cabinTitle").textContent = `${manifest.cabin[0].code} · ${manifest.cabin[0].name}`;
-    rebuildCabin();
-    renderAllChoices();
-    resetCamera();
-  });
-
-  $("#retryBtn").addEventListener("click", () => location.reload());
-}
-
-async function setupFirebaseInBackground() {
-  const status = $("#cloudStatus");
-  try {
-    status.textContent = "Firebase: connecting…";
-    const [{ initializeApp }, firestore, authModule, configModule] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js"),
-      import("https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js"),
-      import("https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js"),
-      import("./firebase/firebase-config.js?v=3")
-    ]);
-
-    const firebaseApp = initializeApp(configModule.firebaseConfig);
-    const db = firestore.getFirestore(firebaseApp);
-    const auth = authModule.getAuth(firebaseApp);
-
-    authModule.onAuthStateChanged(auth, user => {
-      status.textContent = user ? "Firebase: signed in" : "Firebase: guest";
-    });
-
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Firebase timeout")), 4500));
-    const read = firestore.getDocs(firestore.collection(db, "materials"));
-    const snapshot = await Promise.race([read, timeout]);
-    const cloud = {};
-    snapshot.forEach(doc => { cloud[doc.id] = doc.data(); });
-
-    if (Object.keys(cloud).length) {
-      const grouped = cloneLibrary(library);
-      for (const item of Object.values(cloud)) {
-        const category = item.category === "wall" ? "walls" : item.category;
-        if (!grouped[category]) grouped[category] = [];
-        const normalized = {
-          ...item,
-          code: item.code || "",
-          name: item.name || item.code || "Unnamed",
-          file: item.file || `${category}/${item.code}.png`
-        };
-        const existing = grouped[category].findIndex(x => x.code === normalized.code);
-        if (existing >= 0) grouped[category][existing] = normalized;
-        else grouped[category].push(normalized);
+function setupFirebaseBackground(){
+  try{
+    const firebaseApp=initializeApp(firebaseConfig);
+    const db=getFirestore(firebaseApp);
+    const auth=getAuth(firebaseApp);
+    onAuthStateChanged(auth,u=>{cloudStatus.textContent=u?"Firebase: signed in":"Firebase: guest"});
+    // Firebase is deliberately background-only; it can never block the 3D preview.
+    getDocs(collection(db,"materials")).then(snap=>{
+      const cloud={};snap.forEach(d=>cloud[d.id]=d.data());
+      if(Object.keys(cloud).length){
+        const grouped={...library};
+        for(const item of Object.values(cloud)){
+          const cat=item.category==="wall"?"walls":item.category;
+          if(!grouped[cat])continue;
+          const idx=grouped[cat].findIndex(x=>x.code===item.code);
+          if(idx>=0)grouped[cat][idx]={...grouped[cat][idx],...item,file:item.file||grouped[cat][idx].file,name:item.name||grouped[cat][idx].name};
+        }
+        library=grouped;renderAll();rebuildCabin();
       }
-      library = grouped;
-      renderAllChoices();
-      rebuildCabin();
-    }
+      cloudStatus.textContent="Firebase: connected";
+    }).catch(()=>cloudStatus.textContent="Firebase: local demo");
+  }catch(e){cloudStatus.textContent="Firebase: local demo"}
+}
 
-    if (status.textContent !== "Firebase: signed in") status.textContent = "Firebase: connected";
-  } catch (error) {
-    console.warn("Firebase background connection unavailable:", error);
-    status.textContent = "Firebase: local demo";
+function boot(){
+  showLoading(true);
+  try{
+    rebuildCabin();
+    renderAll();
+    frameCamera();
+    showLoading(false);
+    // Let the UI paint first, then start Firebase.
+    setTimeout(setupFirebaseBackground,80);
+  }catch(e){
+    console.error(e);showLoading(false);cloudStatus.textContent="Firebase: local demo";
   }
 }
 
-function animate() {
-  requestAnimationFrame(animate);
-  if (!renderer || !scene || !camera) return;
-  renderer.render(scene, camera);
-}
-
-async function boot() {
-  setupEvents();
-  try {
-    setLoading(true, "Đang khởi tạo 3D…", "Không chờ Firebase");
-    await loadManifest();
-    initThree();
-    animate();
-    // Cloud is deliberately non-blocking: 3D must remain usable even if Firebase fails.
-    void setupFirebaseInBackground();
-  } catch (error) {
-    showError(error);
-  }
-}
-
+addEventListener("resize",frameCamera,{passive:true});
+if("ResizeObserver" in window)new ResizeObserver(frameCamera).observe(viewer);
 boot();
+
+(function animate(){requestAnimationFrame(animate);renderer.render(scene,camera)})();
