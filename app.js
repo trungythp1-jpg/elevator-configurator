@@ -116,15 +116,6 @@ function createCabin() {
   createCeilingDetails();
 
   createDoorFrame();
-  railMesh = createHandrail();
-  cabinRoot.add(railMesh);
-
-  copMesh = createCOP();
-  cabinRoot.add(copMesh);
-
-  lightRig = new THREE.Group();
-  cabinRoot.add(lightRig);
-  updateLighting();
 }
 
 function createFloorDetails() {
@@ -225,16 +216,7 @@ function createCeilingDetails() {
     ceilingDetailGroup.add(s);
   });
 
-  // Two long soft LED channels instead of exposed round bulbs.
-  [-.29,.29].forEach(x => {
-    const channel = box(.035,.012,.72,light);
-    channel.position.set(x,DIM.h-.055,0);
-    ceilingDetailGroup.add(channel);
-
-    const recess = box(.052,.009,.76,dark);
-    recess.position.set(x,DIM.h-.049,0);
-    ceilingDetailGroup.add(recess);
-  });
+  // Clean recessed ceiling: no visible lamps in this cabin baseline.
 }
 
 function createDoorFrame() {
@@ -454,8 +436,6 @@ function updateSummary() {
     <div><b>Sàn</b><span>${state.floor}</span></div>
     <div><b>Trần</b><span>${state.ceiling}</span></div>
     <div><b>Cửa</b><span>${state.door}</span></div>
-    <div><b>Tay vịn</b><span>${state.handrail}</span></div>
-    <div><b>Bảng điều khiển</b><span>${state.cop}</span></div>
   `;
 }
 
@@ -496,20 +476,7 @@ function updateMaterials() {
   floorMesh.material = texturedMat("floor",state.floor,.62,.08);
   ceilingMesh.material = texturedMat("ceiling",state.ceiling,.55,.15);
 
-  if (railMesh) {
-    cabinRoot.remove(railMesh);
-    railMesh = createHandrail();
-    cabinRoot.add(railMesh);
-  }
-
-  if (copMesh) {
-    cabinRoot.remove(copMesh);
-    copMesh = createCOP();
-    cabinRoot.add(copMesh);
-  }
-
   createDoorFrame();
-  updateLighting();
   updateSummary();
 }
 
