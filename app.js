@@ -245,17 +245,21 @@ function applyCamera(){
   const narrow=r.width<650;
 
   // Far enough to show the complete 2400 mm height and 1200 mm depth.
+  // Camera is above the visual center and aims lower so the cabin
+  // moves upward in the preview instead of sitting at the bottom.
   // Slight horizontal offset gives a useful 3-wall perspective.
   if(portrait){
-    camera.fov=narrow?39:37;
-    camera.position.set(.68,1.24,-5.45);
+    // iPad portrait: camera is higher and farther back.
+    // Lower target point shifts the cabin upward in the screen
+    // while preserving a clear view of the floor.
+    camera.fov=narrow?43:41;
+    camera.position.set(.62,1.58,-6.10);
+    camera.lookAt(0,0.96,0.08);
   }else{
-    camera.fov=35;
-    camera.position.set(.72,1.28,-4.95);
+    camera.fov=39;
+    camera.position.set(.68,1.55,-5.55);
+    camera.lookAt(0,0.98,0.08);
   }
-
-  // Look into the cabin, slightly above floor level.
-  camera.lookAt(0,1.18,0.02);
   camera.updateProjectionMatrix();
 }
 
