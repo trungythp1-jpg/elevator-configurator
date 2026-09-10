@@ -1,92 +1,97 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Elevator Configurator</title>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
-<link rel="stylesheet" href="./style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elevator Configurator — 3D Showroom</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Import Map cho Three.js chuẩn ES Module -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
-<header class="topbar">
-  <div class="logo-area">
-    <div class="logo-title">ELEVATOR CONFIGURATOR</div>
-    <div class="logo-sub">THIẾT KẾ THANG MÁY THEO PHONG CÁCH CỦA BẠN</div>
-  </div>
-  <nav class="top-actions">
-    <button>▣<span>Lưu mẫu</span></button>
-    <button>▧<span>Tải ảnh</span></button>
-    <button>▤<span>Báo giá</span></button>
-    <button>♧<span>Chia sẻ</span></button>
-  </nav>
-  <div class="slogan">Elevate<br><i>A Better Life</i></div>
-</header>
-
-<main class="workspace">
-  <aside class="rail">
-    <button class="rail-item active" data-section="cabin"><b>▥</b><span>Cabin</span></button>
-    <button class="rail-item" data-section="floor"><b>▦</b><span>Sàn</span></button>
-    <button class="rail-item" data-section="walls"><b>▥</b><span>Vách</span></button>
-    <button class="rail-item" data-section="ceiling"><b>⌁</b><span>Trần</span></button>
-    <button class="rail-item" data-section="door"><b>▥</b><span>Cửa</span></button>
-    <button class="rail-item" data-section="handrail"><b>⌁</b><span>Tay vịn</span></button>
-    <button class="rail-item" data-section="cop"><b>▤</b><span>Bảng điều khiển</span></button>
-    <button class="rail-item" data-section="lighting"><b>♧</b><span>Ánh sáng</span></button>
-    <button class="rail-item" data-section="color"><b>◉</b><span>Màu sắc</span></button>
-  </aside>
-
-  <section class="left-panel">
-    <div class="panel cabin-panel">
-      <div class="panel-heading"><strong>Chọn kiểu cabin</strong><span>⌄</span></div>
-      <div id="cabinStyleGrid" class="style-grid"></div>
-    </div>
-    <div class="panel info-panel">
-      <div class="info-title">Thông tin mẫu hiện tại</div>
-      <div id="currentInfo"></div>
-    </div>
-  </section>
-
-  <section class="viewer-column">
-    <div class="viewer-wrap">
-      <div id="viewer"></div>
-      <div id="loading">Đang khởi tạo 3D…</div>
-      <div class="viewer-dims"><span>W 1400</span><span>D 1200</span><span>H 2400</span><small>mm</small></div>
-    </div>
-
-    <div class="viewer-controls">
-      <button id="rotateLeft">‹ <span>Quay trái</span></button>
-      <button id="doorToggle">▥ <span id="doorText">Mở cửa</span></button>
-      <button id="rotateRight"><span>Quay phải</span> ›</button>
-    </div>
-
-    <div id="views" class="view-strip">
-      <button class="view-card active" data-view="front"><div class="view-art front"></div><span>Mặt trước</span></button>
-      <button class="view-card" data-view="left"><div class="view-art left"></div><span>Mặt trái</span></button>
-      <button class="view-card" data-view="right"><div class="view-art right"></div><span>Mặt phải</span></button>
-      <button class="view-card" data-view="ceiling"><div class="view-art ceiling"></div><span>Trần</span></button>
-      <button class="view-card" data-view="floor"><div class="view-art floor"></div><span>Sàn</span></button>
-    </div>
-  </section>
-
-  <aside class="right-panel">
-    <div class="panel catalog-panel">
-      <div class="panel-heading"><strong>Mẫu cabin</strong></div>
-      <div class="filters">
-        <button class="filter active">Tất cả</button><button class="filter">Inox</button><button class="filter">Kính</button><button class="filter">Gỗ</button><button class="filter">Hoa văn</button>
+  <div id="app">
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="brand">
+        <h1>ELEVATOR CONFIGURATOR</h1>
+        <p class="subtitle">THIẾT KẾ THANG MÁY THEO PHONG CÁCH CỦA BẠN</p>
       </div>
-      <div id="cabinCatalog" class="catalog-grid"></div>
-    </div>
+      <div class="header-actions">
+        <button id="btnSave" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Lưu mẫu
+        </button>
+        <button id="btnExport" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Tải ảnh
+        </button>
+        <button id="btnQuote" class="btn btn-secondary">Báo giá</button>
+        <button id="btnShare" class="btn btn-secondary">Chia sẻ</button>
+      </div>
+    </header>
 
-    <div class="panel action-panel">
-      <button class="green-action" id="saveBtn">✓ &nbsp;Lưu cấu hình mẫu</button>
-      <button id="quoteBtn">▤ &nbsp; Gửi yêu cầu báo giá</button>
-      <button id="imageBtn">▧ &nbsp; Tải hình ảnh</button>
-      <button id="shareBtn">♧ &nbsp; Chia sẻ mẫu</button>
-      <div class="banner">Nâng tầm<br><i>Không gian sống</i></div>
-    </div>
-  </aside>
-</main>
-<div id="toast"></div>
-<script type="module" src="./app.js"></script>
+    <!-- MAIN CONTAINER -->
+    <main class="app-body">
+      <!-- LEFT CATEGORY TOOLBAR -->
+      <nav class="category-toolbar" id="categoryToolbar">
+        <!-- Generates Dynamically -->
+      </nav>
+
+      <!-- OPTIONS SELECTION PANEL -->
+      <aside class="options-panel" id="optionsPanel">
+        <div class="panel-header">
+          <h2 id="panelTitle">Chọn tùy chỉnh</h2>
+        </div>
+        <div class="panel-content" id="panelContent">
+          <!-- Dynamic Content -->
+        </div>
+      </aside>
+
+      <!-- 3D VIEWPORT CONTAINER -->
+      <section class="viewport-section">
+        <!-- VIEW CONTROL OVERLAY -->
+        <div class="view-controls">
+          <div class="preset-group">
+            <button class="btn-chip active" data-preset="front">Mặt trước</button>
+            <button class="btn-chip" data-preset="left">Mặt trái</button>
+            <button class="btn-chip" data-preset="right">Mặt phải</button>
+            <button class="btn-chip" data-preset="ceiling">Trần</button>
+            <button class="btn-chip" data-preset="floor">Sàn</button>
+          </div>
+          <div class="action-group">
+            <button id="btnRotateLeft" class="btn-circle" title="Quay trái">↺</button>
+            <button id="btnToggleDoor" class="btn-chip" data-status="open">Đóng cửa</button>
+            <button id="btnRotateRight" class="btn-circle" title="Quay phải">↻</button>
+          </div>
+        </div>
+
+        <div id="canvasContainer" class="canvas-container"></div>
+        <div id="loadingSpinner" class="loading-overlay">
+          <div class="spinner"></div>
+          <span>Đang khởi tạo không gian 3D...</span>
+        </div>
+      </section>
+
+      <!-- RIGHT SUMMARY PANEL -->
+      <aside class="summary-panel">
+        <div class="panel-header">
+          <h2>Thông số cấu hình</h2>
+        </div>
+        <div class="summary-content" id="summaryContent">
+          <!-- Dynamic Summary -->
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
