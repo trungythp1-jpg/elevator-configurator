@@ -11,12 +11,9 @@ const fallback = {
     {code:"GV-002",name:"Titanium Modern"},
     {code:"GV-003",name:"Dark Luxury"}
   ],
-  walls:[
-    "I01","I02","I03","I04","I05","I06","I07","I08"
-  ].map((code,i)=>({code,name:[
-    "Inox Champagne Hairline","Inox Titanium Mirror","Inox Silver Hairline",
-    "Inox Black Mirror","Inox Rose Hairline","Inox Bronze Mirror",
-    "Inox Deep Blue Hairline","Inox Pearl Etched"
+  walls:["I01","I02","I03","I04","I05","I06","I07","I08"].map((code,i)=>({code,name:[
+    "Inox Champagne Hairline","Inox Titanium Mirror","Inox Silver Hairline","Inox Black Mirror",
+    "Inox Rose Hairline","Inox Bronze Mirror","Inox Deep Blue Hairline","Inox Pearl Etched"
   ][i]})),
   floor:["S01","S02","S03","S04","S05","S06"].map((code,i)=>({code,name:[
     "Granite Light","Granite Dark","Black Stone","Warm Stone","Grey Ceramic","Ivory Ceramic"
@@ -64,9 +61,12 @@ const toast = $("#toast");
 let scene, camera, renderer, cabinGroup;
 let wallMeshes = {};
 let dynamicLights = [];
-let textureCache = new Map();
+const textureCache = new Map();
 
-function item(cat,i){ const a=library[cat]||[]; return a.length ? a[i%a.length] : {code:"",name:""}; }
+function item(cat,i){
+  const a=library[cat]||[];
+  return a.length ? a[i%a.length] : {code:"",name:""};
+}
 function path(cat,code){ return `./assets/${cat}/${code}.png`; }
 
 function showToast(message){
@@ -80,7 +80,8 @@ function mat(cat,index,rough=.45,metal=.65){
   const x=item(cat,index);
   const m=new THREE.MeshStandardMaterial({
     color:COLORS[x.code] ?? 0x888888,
-    roughness:rough, metalness:metal
+    roughness:rough,
+    metalness:metal
   });
   const url=path(cat,x.code);
   if(!textureCache.has(url)){
@@ -97,24 +98,38 @@ function mat(cat,index,rough=.45,metal=.65){
 
 function addBox(name,size,pos,material,parent=cabinGroup){
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),material);
-  mesh.name=name; mesh.position.set(...pos); parent.add(mesh); return mesh;
+  mesh.name=name;
+  mesh.position.set(...pos);
+  parent.add(mesh);
+  return mesh;
 }
 
 function init3D(){
   scene=new THREE.Scene();
   scene.background=new THREE.Color(0xf1f5f3);
 
-  camera=new THREE.PerspectiveCamera(35,1,.05,100);
-  renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
+  camera=new THREE.PerspectiveCamera(38,1,.05,100);
+
+  renderer=new THREE.WebGLRenderer({
+    antialias:true,
+    powerPreference:"high-performance"
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
   renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.setClearColor(0xf1f5f3,1);
+
   viewer.innerHTML="";
   viewer.appendChild(renderer.domElement);
 
-  scene.add(new THREE.HemisphereLight(0xffffff,0x78837f,2.3));
-  const key=new THREE.DirectionalLight(0xffffff,2.3); key.position.set(2,4,5); scene.add(key);
-  const front=new THREE.DirectionalLight(0xffffff,1.2); front.position.set(-2,2,6); scene.add(front);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x78837f,2.2));
+
+  const key=new THREE.DirectionalLight(0xffffff,2.4);
+  key.position.set(-2,4,-4);
+  scene.add(key);
+
+  const fill=new THREE.DirectionalLight(0xffffff,1.3);
+  fill.position.set(3,2,-5);
+  scene.add(fill);
 
   cabinGroup=new THREE.Group();
   scene.add(cabinGroup);
@@ -128,7 +143,7 @@ function clearGroup(){
     const o=cabinGroup.children.pop();
     o.traverse?.(n=>{
       if(n.geometry)n.geometry.dispose();
-      if(n.material && !Array.isArray(n.material)) n.material.dispose?.();
+      if(n.material && !Array.isArray(n.material))n.material.dispose?.();
     });
   }
   wallMeshes={};
@@ -139,95 +154,108 @@ function clearGroup(){
 function rebuild(){
   clearGroup();
 
-  // Real cabin dimensions: W 1400 / D 1200 / H 2400 mm.
+  // Fixed real cabin size: W 1400 x D 1200 x H 2400 mm.
   // Scene scale: 1 unit = 1000 mm.
-  const W=1.40,D=1.20,H=2.40,t=.045;
-  const floorT=.055;
+  const W=1.40,D=1.20,H=2.40,t=.045,floorT=.055;
 
   addBox("floor",[W,D,floorT],[0,0,floorT/2],mat("floor",state.floor,.72,.18));
-
   wallMeshes.back=addBox("back",[W,t,H],[0,D/2-t/2,H/2],mat("walls",state.walls.back,.42,.72));
   wallMeshes.left=addBox("left",[t,D,H],[-W/2+t/2,0,H/2],mat("walls",state.walls.left,.42,.72));
   wallMeshes.right=addBox("right",[t,D,H],[W/2-t/2,0,H/2],mat("walls",state.walls.right,.42,.72));
 
   addBox("ceiling",[W,D,t],[0,0,H-t/2],mat("ceiling",state.ceiling,.34,.72));
 
-  // Front frame only. No door leaf: user wants direct view into cabin.
+  // Front frame only. Front remains open so the cabin interior is always visible.
   const frameMat=mat("doors",state.door,.28,.76);
   const fs=.055;
   addBox("frameL",[fs,.055,H],[-W/2+fs/2,-D/2+.025,H/2],frameMat);
   addBox("frameR",[fs,.055,H],[W/2-fs/2,-D/2+.025,H/2],frameMat);
   addBox("frameT",[W,.055,fs],[0,-D/2+.025,H-fs/2],frameMat);
 
-  // Handrail: back wall horizontal.
   const railMat=mat("handrail",state.handrail,.25,.82);
   const rail=new THREE.Mesh(new THREE.CylinderGeometry(.026,.026,.88,24),railMat);
-  rail.rotation.z=Math.PI/2; rail.position.set(0,D/2-.075,1.12); cabinGroup.add(rail);
+  rail.rotation.z=Math.PI/2;
+  rail.position.set(0,D/2-.075,1.12);
+  cabinGroup.add(rail);
 
-  // COP on right wall.
   const copMat=mat("cop",state.cop,.27,.72);
   const cop=addBox("cop",[.26,.045,.58],[W/2-.10,-.02,1.20],copMat);
   cop.rotation.y=Math.PI/2;
 
-  // Ceiling visual panel + lights.
-  const panelMat=new THREE.MeshStandardMaterial({color:0x1f2428,roughness:.28,metalness:.55});
+  const panelMat=new THREE.MeshStandardMaterial({
+    color:0x1f2428,roughness:.28,metalness:.55
+  });
   addBox("ceilingPanel",[.76,.52,.018],[0,.04,H-.08],panelMat);
 
   const lightCode=item("lighting",state.lighting).code;
   const color={L01:0xffd07b,L02:0xfff2d9,L03:0xbfe4ff,L04:0xffffff}[lightCode]||0xffffff;
   const intensity={L01:3.2,L02:3.0,L03:2.8,L04:3.6}[lightCode]||3;
+
   [[-.48,-.38],[.48,-.38],[-.48,.34],[.48,.34]].forEach(([x,z])=>{
     const bulb=new THREE.Mesh(
       new THREE.CylinderGeometry(.055,.055,.015,24),
-      new THREE.MeshStandardMaterial({color:0xffffff,emissive:color,emissiveIntensity:1.8})
+      new THREE.MeshStandardMaterial({
+        color:0xffffff,
+        emissive:color,
+        emissiveIntensity:1.8
+      })
     );
-    bulb.rotation.x=Math.PI/2; bulb.position.set(x,z,H-.055); cabinGroup.add(bulb);
-    const p=new THREE.PointLight(color,intensity,3.4,2); p.position.set(x,z,H-.15); cabinGroup.add(p);
+    bulb.rotation.x=Math.PI/2;
+    bulb.position.set(x,z,H-.055);
+    cabinGroup.add(bulb);
+
+    const p=new THREE.PointLight(color,intensity,3.4,2);
+    p.position.set(x,z,H-.15);
+    cabinGroup.add(p);
     dynamicLights.push(p);
   });
 
-  // Subtle rear decorative panel for etched mode.
   if(state.wallMode==="pattern"){
     const pmat=new THREE.MeshStandardMaterial({
-      color:0xd7b78e,roughness:.28,metalness:.72,emissive:0x1b1007,emissiveIntensity:.08
+      color:0xd7b78e,
+      roughness:.28,
+      metalness:.72,
+      emissive:0x1b1007,
+      emissiveIntensity:.08
     });
-    const panel=addBox("etchedPanel",[.82,.018,1.70],[0,D/2-.028,1.30],pmat);
-    panel.userData.pattern=true;
-    addPatternLines(pmat);
+    addBox("etchedPanel",[.82,.018,1.70],[0,D/2-.028,1.30],pmat);
   }
 
   applyCamera();
 }
 
-function addPatternLines(material){
-  const g=new THREE.Group();
-  const z0=0.55;
-  for(let i=0;i<5;i++){
-    const geo=new THREE.TorusGeometry(.13,.012,8,32,Math.PI*1.35);
-    const m=new THREE.Mesh(geo,material);
-    m.rotation.x=Math.PI/2;
-    m.position.set(-.22+i*.11,D/2-.04,z0+i*.18);
-    g.add(m);
-  }
-  cabinGroup.add(g);
-}
-
+/*
+  IMPORTANT:
+  Fixed preview camera.
+  Front opening is at Z = -0.60.
+  Camera is therefore placed OUTSIDE the front, at negative Z.
+  This prevents the previous error where the camera was behind the cabin
+  and the ceiling filled the screen.
+*/
 function applyCamera(){
+  if(!renderer || !camera || !viewer)return;
+
   const r=viewer.getBoundingClientRect();
-  if(!r.width||!r.height)return;
+  if(!r.width || !r.height)return;
+
   renderer.setSize(r.width,r.height,false);
   camera.aspect=r.width/r.height;
 
-  // Fixed front perspective. Deliberately high + far so the full floor,
-  // ceiling and all three walls remain visible.
-  const portrait=r.height>r.width*1.15;
+  const portrait=r.height>=r.width;
+  const narrow=r.width<650;
+
+  // Far enough to show the complete 2400 mm height and 1200 mm depth.
+  // Slight horizontal offset gives a useful 3-wall perspective.
   if(portrait){
-    camera.position.set(.72,1.88,5.35);
-    camera.lookAt(0,1.20,.05);
+    camera.fov=narrow?39:37;
+    camera.position.set(.68,1.24,-5.45);
   }else{
-    camera.position.set(.70,1.82,4.75);
-    camera.lookAt(0,1.18,.05);
+    camera.fov=35;
+    camera.position.set(.72,1.28,-4.95);
   }
+
+  // Look into the cabin, slightly above floor level.
+  camera.lookAt(0,1.18,0.02);
   camera.updateProjectionMatrix();
 }
 
@@ -236,12 +264,20 @@ function resize3D(){
 }
 
 function renderCabins(){
-  const el=$("#cabinChoices"); el.innerHTML="";
+  const el=$("#cabinChoices");
+  el.innerHTML="";
   library.cabin.forEach((x,i)=>{
     const d=document.createElement("button");
-    d.type="button"; d.className=`cabin-card ${i===state.cabin?"active":""}`;
-    const bg=i===0?"linear-gradient(120deg,#cbb58c,#eee1ca)":i===1?"linear-gradient(120deg,#8e979f,#e3e7e9)":"linear-gradient(120deg,#22282d,#697176)";
-    d.innerHTML=`<div class="cabin-thumb" style="background:${bg}"><span class="cabin-code">${x.code}</span></div><span class="card-label">${x.code} · ${x.name}</span>`;
+    d.type="button";
+    d.className=`cabin-card ${i===state.cabin?"active":""}`;
+    const bg=i===0
+      ?"linear-gradient(120deg,#cbb58c,#eee1ca)"
+      :i===1
+      ?"linear-gradient(120deg,#8e979f,#e3e7e9)"
+      :"linear-gradient(120deg,#22282d,#697176)";
+    d.innerHTML=`<div class="cabin-thumb" style="background:${bg}">
+      <span class="cabin-code">${x.code}</span>
+    </div><span class="card-label">${x.code} · ${x.name}</span>`;
     d.addEventListener("click",()=>{
       state.cabin=i;
       updateText();
@@ -259,19 +295,24 @@ function renderWallModes(){
 }
 
 function renderWalls(){
-  const zones=$("#wallZones"); zones.innerHTML="";
+  const zones=$("#wallZones");
+  zones.innerHTML="";
   const labels={left:"Vách trái",back:"Vách sau",right:"Vách phải"};
+
   Object.entries(labels).forEach(([key,label])=>{
     const b=document.createElement("button");
-    b.type="button"; b.className=state.wallTarget===key?"active":"";
+    b.type="button";
+    b.className=state.wallTarget===key?"active":"";
     b.textContent=`${label} · ${item("walls",state.walls[key]).code}`;
     b.addEventListener("click",()=>{
-      state.wallTarget=key; renderWalls();
+      state.wallTarget=key;
+      renderWalls();
     });
     zones.appendChild(b);
   });
 
-  const sw=$("#wallMaterials"); sw.innerHTML="";
+  const sw=$("#wallMaterials");
+  sw.innerHTML="";
   library.walls.forEach((x,i)=>{
     const b=document.createElement("button");
     b.type="button";
@@ -284,7 +325,9 @@ function renderWalls(){
       }else{
         state.walls[state.wallTarget]=i;
       }
-      rebuild(); renderWalls(); updateConfig();
+      rebuild();
+      renderWalls();
+      updateConfig();
     });
     sw.appendChild(b);
   });
@@ -296,13 +339,19 @@ function isWallSelected(i){
 }
 
 function renderOptions(cat,id,stateKey){
-  const el=$("#"+id); el.innerHTML="";
+  const el=$("#"+id);
+  el.innerHTML="";
   library[cat].forEach((x,i)=>{
     const b=document.createElement("button");
-    b.type="button"; b.className=`option-card ${state[stateKey]===i?"active":""}`;
-    b.innerHTML=`<img src="${path(cat,x.code)}" alt="${x.code}"><span class="card-label">${x.code} · ${x.name}</span>`;
+    b.type="button";
+    b.className=`option-card ${state[stateKey]===i?"active":""}`;
+    b.innerHTML=`<img src="${path(cat,x.code)}" alt="${x.code}">
+      <span class="card-label">${x.code} · ${x.name}</span>`;
     b.addEventListener("click",()=>{
-      state[stateKey]=i; rebuild(); renderOptions(cat,id,stateKey); updateConfig();
+      state[stateKey]=i;
+      rebuild();
+      renderOptions(cat,id,stateKey);
+      updateConfig();
     });
     el.appendChild(b);
   });
@@ -311,7 +360,11 @@ function renderOptions(cat,id,stateKey){
 function updateText(){
   const c=item("cabin",state.cabin);
   $("#cabinTitle").textContent=`${c.code} · ${c.name}`;
-  const mode=state.wallMode==="same"?"Same Material":state.wallMode==="independent"?"Independent":"Etched Pattern";
+  const mode=state.wallMode==="same"
+    ?"Same Material"
+    :state.wallMode==="independent"
+    ?"Independent"
+    :"Etched Pattern";
   $("#modeTitle").textContent=`3 Walls · ${mode}`;
 }
 
@@ -321,6 +374,7 @@ function updateConfig(){
     cabin:item("cabin",state.cabin).code,
     dimensions:"1400 × 1200 × 2400 mm",
     preview:"fixed / front open",
+    camera:"front / fixed / full cabin",
     walls:{
       left:item("walls",state.walls.left).code,
       back:item("walls",state.walls.back).code,
@@ -350,16 +404,23 @@ function renderAll(){
 
 function reset(){
   Object.assign(state,{
-    cabin:0,wallMode:"same",wallTarget:"left",
+    cabin:0,
+    wallMode:"same",
+    wallTarget:"left",
     walls:{left:0,back:0,right:0},
-    floor:0,ceiling:0,door:0,handrail:0,cop:0,lighting:0
+    floor:0,
+    ceiling:0,
+    door:0,
+    handrail:0,
+    cop:0,
+    lighting:0
   });
-  rebuild(); renderAll();
+  rebuild();
+  renderAll();
   showToast("Đã reset cấu hình");
 }
 
-// Accordion controls use normal buttons and event listeners.
-// No canvas overlay is allowed to cover the controls.
+// Accordion controls.
 document.querySelectorAll("[data-toggle]").forEach(button=>{
   button.addEventListener("click",()=>{
     const name=button.dataset.toggle;
@@ -369,17 +430,22 @@ document.querySelectorAll("[data-toggle]").forEach(button=>{
     body.classList.toggle("hidden",!open);
     const chevron=button.querySelector(".chevron");
     if(chevron)chevron.textContent=open?"⌄":"›";
+    requestAnimationFrame(resize3D);
   });
 });
 
 document.querySelectorAll("[data-wall-mode]").forEach(button=>{
   button.addEventListener("click",()=>{
     state.wallMode=button.dataset.wallMode;
-    renderWallModes(); renderWalls(); rebuild(); updateConfig();
+    renderWallModes();
+    renderWalls();
+    rebuild();
+    updateConfig();
   });
 });
 
 $("#resetBtn").addEventListener("click",reset);
+
 $("#quoteBtn").addEventListener("click",()=>{
   showToast("Cấu hình đã sẵn sàng để báo giá");
 });
@@ -389,7 +455,9 @@ async function loadManifest(){
     const r=await fetch("./assets/asset-manifest.json",{cache:"no-store"});
     if(r.ok){
       const data=await r.json();
-      if(data && typeof data==="object") library={...library,...data};
+      if(data && typeof data==="object"){
+        library={...library,...data};
+      }
     }
   }catch(e){}
 }
@@ -399,20 +467,25 @@ async function firebaseBackground(){
     const app=initializeApp(firebaseConfig);
     const db=getFirestore(app);
     status.textContent="Firebase: connecting…";
+
     const snap=await Promise.race([
       getDocs(collection(db,"materials")),
       new Promise((_,reject)=>setTimeout(()=>reject(new Error("timeout")),5000))
     ]);
+
     const cloud={};
     snap.forEach(d=>cloud[d.id]=d.data());
+
     for(const data of Object.values(cloud)){
       const cat=data.category==="wall"?"walls":data.category;
       if(!library[cat])continue;
       const idx=library[cat].findIndex(x=>x.code===data.code);
       if(idx>=0)library[cat][idx]={...library[cat][idx],...data};
     }
+
     status.textContent="Firebase: connected";
-    renderAll(); rebuild();
+    renderAll();
+    rebuild();
   }catch(e){
     status.textContent="Local demo";
   }
@@ -421,13 +494,17 @@ async function firebaseBackground(){
 async function boot(){
   try{
     loading.classList.remove("hide");
+
+    // 3D starts first. Firebase never blocks the preview.
     await loadManifest();
     init3D();
     renderAll();
+
     requestAnimationFrame(()=>{
       resize3D();
       loading.classList.add("hide");
     });
+
     setTimeout(firebaseBackground,150);
   }catch(err){
     console.error(err);
@@ -437,6 +514,7 @@ async function boot(){
 }
 
 window.addEventListener("resize",resize3D,{passive:true});
+
 if("ResizeObserver" in window){
   new ResizeObserver(()=>resize3D()).observe(viewer);
 }
