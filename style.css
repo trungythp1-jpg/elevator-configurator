@@ -20,4 +20,15 @@ button{font:inherit;color:inherit}
 .error-box{position:absolute;z-index:12;left:50%;top:50%;transform:translate(-50%,-50%);width:min(430px,calc(100% - 32px));padding:22px;border-radius:16px;background:#fff;border:1px solid #e0e5e3;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;text-align:center}.error-box span{font-size:12px;color:#6d7774;word-break:break-word}.error-box button{background:var(--accent);border:1px solid var(--accent);color:#fff;border-radius:10px;padding:10px;font-weight:700;cursor:pointer}.error-box[hidden],.loading[hidden]{display:none!important}
 @media(max-width:900px){.topbar{height:68px;padding:0 14px}.eyebrow{font-size:9px}.topbar h1{font-size:20px}.status{display:none}.app-shell{height:calc(100vh - 68px);grid-template-columns:280px minmax(0,1fr)}.control-panel{padding:14px 11px 30px}.viewer-panel{padding:10px}.viewer-topbar{left:14px;right:14px;top:12px}.viewer-topbar strong{font-size:14px}.viewer-bottom-hud{bottom:12px}.panel-intro strong{font-size:17px}}
 @media(max-width:700px){body{overflow:auto}.app-shell{height:auto;display:flex;flex-direction:column}.viewer-panel{order:0;height:430px;min-height:430px}.control-panel{order:1;height:auto;overflow:visible;border-right:0;border-top:1px solid var(--line)}.choice-grid{grid-template-columns:repeat(3,1fr)}.segmented{grid-template-columns:repeat(3,1fr)}.zone-grid{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:430px){.viewer-panel{height:390px;min-height:390px}.viewer-bottom-hud span{display:none}.swatches,.cards{grid-template-columns:repeat(3,1fr)}.choice label,.card label{font-size:9px;padding:7px 6px}}
+@media(max-width:430px){.viewer-panel{height:390px;min-height:390px}.viewer-bottom-hud span:last-child{display:inline}.swatches,.cards{grid-template-columns:repeat(3,1fr)}.choice label,.card label{font-size:9px;padding:7px 6px}}
+
+
+/* V6 — fixed cabin preview */
+#viewer {
+  touch-action: none;
+}
+#viewer > canvas {
+  touch-action: none;
+  pointer-events: none;
+}
+.viewer-bottom-hud b { font-weight: 800; color: var(--text); }
