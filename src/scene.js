@@ -24,14 +24,12 @@ window.SceneManager = (function () {
                 powerPreference: 'high-performance'
             });
 
-
         this.renderer.setPixelRatio(
             Math.min(
                 window.devicePixelRatio || 1,
                 2
             )
         );
-
 
         /*
          * Three.js r128
@@ -40,10 +38,8 @@ window.SceneManager = (function () {
         this.renderer.outputEncoding =
             THREE.sRGBEncoding;
 
-
         this.renderer.toneMapping =
             THREE.ACESFilmicToneMapping;
-
 
         this.renderer.toneMappingExposure =
             1.05;
@@ -58,7 +54,6 @@ window.SceneManager = (function () {
         this.scene =
             new THREE.Scene();
 
-
         this.scene.background =
             new THREE.Color(
                 0xdfe4e6
@@ -69,9 +64,6 @@ window.SceneManager = (function () {
          * ========================================================
          * CAMERA
          * ========================================================
-         *
-         * FOV được tăng nhẹ để phù hợp với màn hình mobile
-         * và góc nhìn showroom.
          */
 
         this.camera =
@@ -87,6 +79,9 @@ window.SceneManager = (function () {
          * ========================================================
          * ORBIT CONTROLS
          * ========================================================
+         *
+         * Chỉ giữ compatibility.
+         * Người dùng không được tự do xoay / pan / zoom.
          */
 
         this.controls =
@@ -94,7 +89,6 @@ window.SceneManager = (function () {
                 this.camera,
                 canvas
             );
-
 
         this.controls.enableRotate = false;
         this.controls.enablePan = false;
@@ -110,14 +104,12 @@ window.SceneManager = (function () {
 
         this.resize();
 
-
         var self = this;
 
         this._resizeHandler =
             function () {
                 self.resize();
             };
-
 
         window.addEventListener(
             'resize',
@@ -161,10 +153,8 @@ window.SceneManager = (function () {
                 return;
             }
 
-
             var rect =
                 this.canvas.getBoundingClientRect();
-
 
             var width =
                 Math.max(
@@ -174,7 +164,6 @@ window.SceneManager = (function () {
                     1
                 );
 
-
             var height =
                 Math.max(
                     1,
@@ -183,63 +172,16 @@ window.SceneManager = (function () {
                     1
                 );
 
-
             this.renderer.setSize(
                 width,
                 height,
                 false
             );
 
-
             this.camera.aspect =
                 width / height;
 
-
             this.camera.updateProjectionMatrix();
-        };
-
-
-    /*
-     * ============================================================
-     * CAMERA DISTANCE HELPERS
-     * ============================================================
-     *
-     * Tính khoảng cách dựa trên kích thước thật của cabin.
-     *
-     * Đây là phần quan trọng nhất để tránh trường hợp
-     * vách sau chiếm toàn bộ màn hình trên mobile.
-     */
-
-    Manager.prototype.fitDistance =
-        function (height) {
-
-            var fov =
-                THREE.MathUtils.degToRad(
-                    this.camera.fov
-                );
-
-
-            /*
-             * Khoảng cách cần thiết để chiều cao
-             * của cabin nằm gọn trong khung hình.
-             */
-
-            var distance =
-                (
-                    height * 0.5
-                ) /
-                Math.tan(
-                    fov * 0.5
-                );
-
-
-            /*
-             * Margin showroom.
-             *
-             * Không đặt cabin sát mép màn hình.
-             */
-
-            return distance * 1.22;
         };
 
 
@@ -255,7 +197,6 @@ window.SceneManager = (function () {
             var d =
                 CONFIG.DIMENSIONS;
 
-
             var name =
                 String(
                     view || 'FRONT'
@@ -263,264 +204,331 @@ window.SceneManager = (function () {
 
 
             /*
-             * Camera target.
+             * ====================================================
+             * FRONT / SHOWROOM 3/4
+             * ====================================================
              *
-             * Hơi thấp hơn tâm hình học để nhìn được
-             * cả trần và sàn trong cabin.
-             */
-
-            var target =
-                new THREE.Vector3(
-                    0,
-                    d.height * 0.49,
-                    0
-                );
-
-
-            var position;
-
-
-            /*
-             * =================================================
-             * FRONT
-             * =================================================
+             * Đây là góc chính.
              *
-             * Đây là view quan trọng nhất.
+             * Camera:
+             * - đứng phía trước cabin
+             * - lệch nhẹ sang phải
+             * - cao hơn tâm cabin
+             * - nhìn hơi xuống
              *
-             * Camera đứng ngoài cửa cabin.
-             * Không nhìn quá sát vách sau.
+             * Mục tiêu:
+             * nhìn thấy vách trái + vách sau + vách phải,
+             * đồng thời thấy sàn và một phần trần.
              */
 
             if (name === 'FRONT') {
 
-                var frontDistance =
-                    this.fitDistance(
-                        d.height
+                var frontTarget =
+                    new THREE.Vector3(
+                        0,
+                        d.height * 0.43,
+                        0
                     );
 
 
                 /*
-                 * Trên mobile portrait, chiều cao là
-                 * giới hạn chính.
+                 * Với cabin:
                  *
-                 * Bảo đảm khoảng cách tối thiểu.
+                 * width  = 1.4 m
+                 * depth  = 1.2 m
+                 * height = 2.4 m
+                 *
+                 * Camera lệch ngang khoảng 0.60 m.
                  */
 
-                frontDistance =
-                    Math.max(
-                        frontDistance,
-                        d.depth * 2.35
-                    );
-
-
-                position =
+                var frontPosition =
                     new THREE.Vector3(
-                        0,
-                        d.height * 0.49,
-                        frontDistance
+                        d.width * 0.43,
+                        d.height * 0.67,
+                        d.depth * 2.55
                     );
+
+
+                this.camera.position.copy(
+                    frontPosition
+                );
+
+                this.camera.lookAt(
+                    frontTarget
+                );
+
+                this.controls.target.copy(
+                    frontTarget
+                );
+
+                this.controls.update();
+
+                this.render();
+
+                return;
             }
 
 
             /*
-             * =================================================
+             * ====================================================
              * REAR
-             * =================================================
+             * ====================================================
              */
 
-            else if (name === 'REAR') {
+            if (name === 'REAR') {
 
-                var rearDistance =
-                    this.fitDistance(
-                        d.height
-                    );
-
-
-                rearDistance =
-                    Math.max(
-                        rearDistance,
-                        d.depth * 2.35
-                    );
-
-
-                position =
+                var rearTarget =
                     new THREE.Vector3(
                         0,
-                        d.height * 0.49,
-                        -rearDistance
+                        d.height * 0.46,
+                        0
                     );
+
+
+                var rearPosition =
+                    new THREE.Vector3(
+                        -d.width * 0.22,
+                        d.height * 0.60,
+                        -d.depth * 2.55
+                    );
+
+
+                this.camera.position.copy(
+                    rearPosition
+                );
+
+                this.camera.lookAt(
+                    rearTarget
+                );
+
+                this.controls.target.copy(
+                    rearTarget
+                );
+
+                this.controls.update();
+
+                this.render();
+
+                return;
             }
 
 
             /*
-             * =================================================
+             * ====================================================
              * LEFT
-             * =================================================
+             * ====================================================
              */
 
-            else if (name === 'LEFT') {
+            if (name === 'LEFT') {
 
-                var leftDistance =
-                    this.fitDistance(
-                        d.height
-                    );
-
-
-                leftDistance =
-                    Math.max(
-                        leftDistance,
-                        d.width * 2.35
-                    );
-
-
-                position =
+                var leftTarget =
                     new THREE.Vector3(
-                        -leftDistance,
-                        d.height * 0.49,
+                        0,
+                        d.height * 0.46,
                         0
                     );
+
+
+                var leftPosition =
+                    new THREE.Vector3(
+                        -d.width * 2.35,
+                        d.height * 0.60,
+                        d.depth * 0.25
+                    );
+
+
+                this.camera.position.copy(
+                    leftPosition
+                );
+
+                this.camera.lookAt(
+                    leftTarget
+                );
+
+                this.controls.target.copy(
+                    leftTarget
+                );
+
+                this.controls.update();
+
+                this.render();
+
+                return;
             }
 
 
             /*
-             * =================================================
+             * ====================================================
              * RIGHT
-             * =================================================
+             * ====================================================
              */
 
-            else if (name === 'RIGHT') {
+            if (name === 'RIGHT') {
 
-                var rightDistance =
-                    this.fitDistance(
-                        d.height
-                    );
-
-
-                rightDistance =
-                    Math.max(
-                        rightDistance,
-                        d.width * 2.35
-                    );
-
-
-                position =
+                var rightTarget =
                     new THREE.Vector3(
-                        rightDistance,
-                        d.height * 0.49,
+                        0,
+                        d.height * 0.46,
                         0
                     );
+
+
+                var rightPosition =
+                    new THREE.Vector3(
+                        d.width * 2.35,
+                        d.height * 0.60,
+                        d.depth * 0.25
+                    );
+
+
+                this.camera.position.copy(
+                    rightPosition
+                );
+
+                this.camera.lookAt(
+                    rightTarget
+                );
+
+                this.controls.target.copy(
+                    rightTarget
+                );
+
+                this.controls.update();
+
+                this.render();
+
+                return;
             }
 
 
             /*
-             * =================================================
+             * ====================================================
              * CEILING
-             * =================================================
+             * ====================================================
              *
-             * Nhìn xuống để thấy toàn bộ trần.
+             * Camera nhìn từ trên xuống nhưng vẫn giữ
+             * perspective để thấy chiều sâu của trần.
              */
 
-            else if (name === 'CEILING') {
+            if (name === 'CEILING') {
 
-                position =
+                var ceilingTarget =
                     new THREE.Vector3(
                         0,
+                        d.height * 0.76,
+                        0
+                    );
+
+
+                var ceilingPosition =
+                    new THREE.Vector3(
+                        d.width * 0.48,
                         d.height * 2.05,
-                        0.35
+                        d.depth * 0.95
                     );
 
 
-                target.set(
-                    0,
-                    d.height * 0.72,
-                    0
+                this.camera.position.copy(
+                    ceilingPosition
                 );
+
+                this.camera.lookAt(
+                    ceilingTarget
+                );
+
+                this.controls.target.copy(
+                    ceilingTarget
+                );
+
+                this.controls.update();
+
+                this.render();
+
+                return;
             }
 
 
             /*
-             * =================================================
+             * ====================================================
              * FLOOR
-             * =================================================
+             * ====================================================
              *
-             * Nhìn xuống sàn từ phía trước.
+             * Camera thấp hơn, nhìn vào sàn theo perspective.
              */
 
-            else if (name === 'FLOOR') {
+            if (name === 'FLOOR') {
 
-                position =
+                var floorTarget =
                     new THREE.Vector3(
                         0,
-                        d.height * 0.82,
-                        d.depth * 2.10
+                        0.04,
+                        0
                     );
 
 
-                target.set(
+                var floorPosition =
+                    new THREE.Vector3(
+                        d.width * 0.55,
+                        d.height * 0.82,
+                        d.depth * 2.30
+                    );
+
+
+                this.camera.position.copy(
+                    floorPosition
+                );
+
+                this.camera.lookAt(
+                    floorTarget
+                );
+
+                this.controls.target.copy(
+                    floorTarget
+                );
+
+                this.controls.update();
+
+                this.render();
+
+                return;
+            }
+
+
+            /*
+             * ====================================================
+             * FALLBACK
+             * ====================================================
+             */
+
+            var fallbackTarget =
+                new THREE.Vector3(
                     0,
-                    0.04,
+                    d.height * 0.43,
                     0
                 );
-            }
 
 
-            /*
-             * =================================================
-             * FALLBACK
-             * =================================================
-             */
+            var fallbackPosition =
+                new THREE.Vector3(
+                    d.width * 0.43,
+                    d.height * 0.67,
+                    d.depth * 2.55
+                );
 
-            else {
-
-                var fallbackDistance =
-                    this.fitDistance(
-                        d.height
-                    );
-
-
-                fallbackDistance =
-                    Math.max(
-                        fallbackDistance,
-                        d.depth * 2.35
-                    );
-
-
-                position =
-                    new THREE.Vector3(
-                        0,
-                        d.height * 0.49,
-                        fallbackDistance
-                    );
-            }
-
-
-            /*
-             * =================================================
-             * APPLY CAMERA
-             * =================================================
-             */
 
             this.camera.position.copy(
-                position
+                fallbackPosition
             );
-
 
             this.camera.lookAt(
-                target
+                fallbackTarget
             );
-
 
             this.controls.target.copy(
-                target
+                fallbackTarget
             );
 
-
             this.controls.update();
-
-
-            /*
-             * Render ngay lập tức.
-             */
 
             this.render();
         };
@@ -558,7 +566,6 @@ window.SceneManager = (function () {
                 return;
             }
 
-
             this.renderer.render(
                 this.scene,
                 this.camera
@@ -577,14 +584,12 @@ window.SceneManager = (function () {
 
             var self = this;
 
-
             this._animationFrame =
                 requestAnimationFrame(
                     function () {
                         self.animate();
                     }
                 );
-
 
             self.render();
         };
