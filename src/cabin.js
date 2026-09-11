@@ -1,52 +1,46 @@
 window.CabinBuilder = (function () {
 
+    function findCatalog(group, id) {
+
+        var list =
+            CONFIG.CATALOGS[group] || [];
+
+        for (var i = 0; i < list.length; i++) {
+
+            if (list[i].id === id) {
+                return list[i];
+            }
+        }
+
+        return null;
+    }
+
+
     function Builder(scene) {
 
         this.scene = scene;
 
         this.root = new THREE.Group();
-        this.root.name = 'Cabin';
+
+        this.root.name = "Cabin";
 
         scene.add(this.root);
 
-        this.mm = MaterialManager.getInstance();
+        this.mm =
+            MaterialManager.getInstance();
 
-        this.loader = new THREE.GLTFLoader();
-        this.gltfCache = new Map();
+        this.loader =
+            new THREE.GLTFLoader();
+
+        this.gltfCache =
+            new Map();
 
         this.door = {
             left: null,
             right: null,
             progress: 1
         };
-
-        this.buildGeneration = 0;
     }
-
-
-    /*
-     * ============================================================
-     * CATALOG HELPER
-     * ============================================================
-     *
-     * Không phụ thuộc CONFIG.find().
-     * CONFIG vẫn là source of truth.
-     */
-
-    Builder.prototype.findCatalog = function (group, id) {
-
-        if (
-            !window.CONFIG ||
-            !CONFIG.CATALOGS ||
-            !Array.isArray(CONFIG.CATALOGS[group])
-        ) {
-            return null;
-        }
-
-        return CONFIG.CATALOGS[group].find(function (item) {
-            return item.id === id;
-        }) || null;
-    };
 
 
     /*
@@ -57,729 +51,693 @@ window.CabinBuilder = (function () {
 
     Builder.prototype.clear = function () {
 
-        this.root.traverse(function (object) {
-
-            if (object.isMesh && object.geometry) {
-                object.geometry.dispose();
-            }
-
-            /*
-             * Không dispose material ở đây.
-             *
-             * MaterialManager có material cache.
-             * Dispose material tại đây có thể làm những cabin
-             * rebuild sau bị mất material/texture.
-             */
-        });
-
         while (this.root.children.length) {
-            this.root.remove(this.root.children[0]);
+
+            var child =
+                this.root.children[
+                    this.root.children.length - 1
+                ];
+
+            this.root.remove(child);
         }
 
         this.door.left = null;
         this.door.right = null;
+        this.door.progress = 1;
     };
 
 
     /*
      * ============================================================
-     * GLTF CACHE
+     * MESH
      * ============================================================
      */
 
-    Builder.prototype.load = function (path) {
-
-        if (!path) {
-            return Promise.reject(
-                new Error('Missing GLTF asset path')
-            );
-        }
-
-        if (this.gltfCache.has(path)) {
-            return this.gltfCache.get(path);
-        }
-
-        var self = this;
-
-        var promise = new Promise(function (resolve, reject) {
-
-            self.loader.load(
-                path,
-                resolve,
-                undefined,
-                reject
-            );
-        });
-
-        this.gltfCache.set(path, promise);
-
-        return promise;
-    };
-
-
-    /*
-     * ============================================================
-     * MESH HELPER
-     * ============================================================
-     */
-
-    Builder.prototype.mesh = function (
-        parent,
-        geometry,
-        material,
-        x,
-        y,
-        z,
-        name
-    ) {
-
-        var mesh = new THREE.Mesh(
+    Builder.prototype.mesh =
+        function (
+            parent,
             geometry,
-            material
-        );
+            material,
+            x,
+            y,
+            z,
+            name
+        ) {
 
-        mesh.position.set(x, y, z);
+            var mesh =
+                new THREE.Mesh(
+                    geometry,
+                    material
+                );
 
-        mesh.name = name || 'Mesh';
+            mesh.position.set(
+                x,
+                y,
+                z
+            );
 
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+            mesh.name =
+                name || "Mesh";
 
-        parent.add(mesh);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
 
-        return mesh;
-    };
+            parent.add(mesh);
+
+            return mesh;
+        };
 
 
     /*
      * ============================================================
-     * MAIN UPDATE API
+     * UPDATE CABIN
      * ============================================================
-     *
-     * Chuẩn:
-     *
-     * updateCabin(
-     *     state,
-     *     generationToken,
-     *     tokenCheckCallback
-     * )
      */
 
-    Builder.prototype.updateCabin = function (
-        state,
-        generationToken,
-        tokenCheckCallback
-    ) {
-
-        var self = this;
-
-        var token =
-            generationToken !== undefined
-                ? generationToken
-                : (++this.buildGeneration);
-
-        var isCurrent =
-            typeof tokenCheckCallback === 'function'
-                ? tokenCheckCallback
-                : function () {
-                    return token === self.buildGeneration;
-                };
-
-        /*
-         * Nếu caller dùng token nhưng không cung cấp callback,
-         * tăng generation nội bộ để bảo vệ async rebuild.
-         */
-        if (generationToken === undefined) {
-            token = this.buildGeneration;
-        }
-
-        var dimensions = CONFIG.DIMENSIONS;
-        var catalogs = CONFIG.CATALOGS;
-
-        /*
-         * --------------------------------------------------------
-         * Resolve catalog
-         * --------------------------------------------------------
-         */
-
-        var wallLeft =
-            this.findCatalog(
-                'WALLS',
-                state.wallLeft
-            ) ||
-            catalogs.WALLS[0];
-
-        var wallBack =
-            this.findCatalog(
-                'WALLS',
-                state.wallBack
-            ) ||
-            catalogs.WALLS[0];
-
-        var wallRight =
-            this.findCatalog(
-                'WALLS',
-                state.wallRight
-            ) ||
-            catalogs.WALLS[0];
-
-        var base =
-            this.findCatalog(
-                'MATERIALS',
-                state.material
-            ) ||
-            catalogs.MATERIALS[0];
-
-        var etched =
-            this.findCatalog(
-                'ETCHEDS',
-                state.etched
-            ) ||
-            catalogs.ETCHEDS[0];
-
-        var floor =
-            this.findCatalog(
-                'FLOORS',
-                state.floor
-            ) ||
-            catalogs.FLOORS[0];
-
-        var color =
-            this.findCatalog(
-                'COLORS',
-                state.colorTone
-            );
-
-        /*
-         * MaterialManager nhận colorTone theo contract.
-         *
-         * CUSTOM cần HEX thực tế.
-         */
-        var colorTone =
-            state.colorTone === 'CUSTOM'
-                ? state.customColor
-                : state.colorTone;
-
-
-        /*
-         * --------------------------------------------------------
-         * Request materials
-         * --------------------------------------------------------
-         */
-
-        return Promise.all([
-
-            self.mm.getWallMaterial(
-                wallLeft,
-                base,
-                colorTone,
-                etched,
-                dimensions.width,
-                dimensions.height
-            ),
-
-            self.mm.getWallMaterial(
-                wallBack,
-                base,
-                colorTone,
-                etched,
-                dimensions.width,
-                dimensions.height
-            ),
-
-            self.mm.getWallMaterial(
-                wallRight,
-                base,
-                colorTone,
-                etched,
-                dimensions.depth,
-                dimensions.height
-            ),
-
-            self.mm.getFloorMaterial(
-                floor,
-                dimensions.width,
-                dimensions.depth
-            )
-
-        ]).then(function (materials) {
-
-            /*
-             * Async guard.
-             */
-            if (!isCurrent(token)) {
-                return;
-            }
-
-            /*
-             * Xóa cabin cũ ngay trước khi tạo cabin mới.
-             */
-            self.clear();
-
-            /*
-             * ----------------------------------------------------
-             * Interior shell
-             * ----------------------------------------------------
-             */
-
-            var shell = new THREE.Group();
-
-            shell.name = 'InteriorShell';
-
-            self.root.add(shell);
-
-            var wallThickness = 0.035;
-
-
-            /*
-             * BACK
-             */
-
-            self.mesh(
-                shell,
-                new THREE.BoxGeometry(
-                    dimensions.width,
-                    dimensions.height,
-                    wallThickness
-                ),
-                materials[1],
-                0,
-                dimensions.height / 2,
-                -dimensions.depth / 2,
-                'BackWall'
-            );
-
-
-            /*
-             * LEFT
-             */
-
-            self.mesh(
-                shell,
-                new THREE.BoxGeometry(
-                    wallThickness,
-                    dimensions.height,
-                    dimensions.depth
-                ),
-                materials[0],
-                -dimensions.width / 2,
-                dimensions.height / 2,
-                0,
-                'LeftWall'
-            );
-
-
-            /*
-             * RIGHT
-             */
-
-            self.mesh(
-                shell,
-                new THREE.BoxGeometry(
-                    wallThickness,
-                    dimensions.height,
-                    dimensions.depth
-                ),
-                materials[2],
-                dimensions.width / 2,
-                dimensions.height / 2,
-                0,
-                'RightWall'
-            );
-
-
-            /*
-             * FLOOR
-             */
-
-            self.mesh(
-                shell,
-                new THREE.BoxGeometry(
-                    dimensions.width,
-                    0.05,
-                    dimensions.depth
-                ),
-                materials[3],
-                0,
-                0.025,
-                0,
-                'Floor'
-            );
-
-
-            /*
-             * Architectural ceiling.
-             */
-
-            self.buildCeiling();
-
-
-            /*
-             * Front door.
-             */
-
-            self.buildDoor();
-
-
-            /*
-             * Optional components.
-             */
-
-            return self.buildComponents(
-                state,
-                token,
-                isCurrent
-            );
-        });
-    };
-
-
-    /*
-     * ============================================================
-     * COMPATIBILITY ALIASES
-     * ============================================================
-     *
-     * Trong lúc đồng bộ 9 file, giữ alias để tránh app cũ
-     * chết ngay khi gọi build/buildCabin.
-     */
-
-    Builder.prototype.build = function (
-        state,
-        token,
-        isCurrent
-    ) {
-        return this.updateCabin(
+    Builder.prototype.updateCabin =
+        function (
             state,
-            token,
-            isCurrent
-        );
-    };
+            generationToken,
+            tokenCheckCallback
+        ) {
 
-    Builder.prototype.buildCabin = function (
-        state,
-        token,
-        isCurrent
-    ) {
-        return this.updateCabin(
-            state,
-            token,
-            isCurrent
-        );
-    };
+            var self = this;
+
+            var d =
+                CONFIG.DIMENSIONS;
+
+            var c =
+                CONFIG.CATALOGS;
+
+
+            var wallLeft =
+                findCatalog(
+                    "WALLS",
+                    state.wallLeft
+                ) ||
+                c.WALLS[0];
+
+            var wallBack =
+                findCatalog(
+                    "WALLS",
+                    state.wallBack
+                ) ||
+                c.WALLS[0];
+
+            var wallRight =
+                findCatalog(
+                    "WALLS",
+                    state.wallRight
+                ) ||
+                c.WALLS[0];
+
+            var base =
+                findCatalog(
+                    "MATERIALS",
+                    state.material
+                ) ||
+                c.MATERIALS[0];
+
+            var etched =
+                findCatalog(
+                    "ETCHEDS",
+                    state.etched
+                ) ||
+                c.ETCHEDS[0];
+
+            var floor =
+                findCatalog(
+                    "FLOORS",
+                    state.floor
+                ) ||
+                c.FLOORS[0];
+
+            var color =
+                findCatalog(
+                    "COLORS",
+                    state.colorTone
+                );
+
+            var hex =
+                state.colorTone === "CUSTOM"
+                    ? state.customColor
+                    : (
+                        color &&
+                        color.hex
+                            ? color.hex
+                            : null
+                    );
+
+
+            /*
+             * ====================================================
+             * MATERIALS
+             * ====================================================
+             */
+
+            return Promise.all([
+
+                self.mm.getWallMaterial(
+                    wallLeft,
+                    base,
+                    hex,
+                    etched,
+                    d.width,
+                    d.height
+                ),
+
+                self.mm.getWallMaterial(
+                    wallBack,
+                    base,
+                    hex,
+                    etched,
+                    d.width,
+                    d.height
+                ),
+
+                self.mm.getWallMaterial(
+                    wallRight,
+                    base,
+                    hex,
+                    etched,
+                    d.depth,
+                    d.height
+                ),
+
+                self.mm.getFloorMaterial(
+                    floor,
+                    d.width,
+                    d.depth
+                )
+
+            ]).then(function (materials) {
+
+                if (
+                    tokenCheckCallback &&
+                    !tokenCheckCallback(
+                        generationToken
+                    )
+                ) {
+                    return;
+                }
+
+
+                self.clear();
+
+
+                /*
+                 * =================================================
+                 * INTERIOR SHELL
+                 * =================================================
+                 */
+
+                var shell =
+                    new THREE.Group();
+
+                shell.name =
+                    "InteriorShell";
+
+                self.root.add(shell);
+
+
+                var wallThickness =
+                    0.035;
+
+
+                /*
+                 * BACK WALL
+                 */
+
+                self.mesh(
+                    shell,
+                    new THREE.BoxGeometry(
+                        d.width,
+                        d.height,
+                        wallThickness
+                    ),
+                    materials[1],
+                    0,
+                    d.height / 2,
+                    -d.depth / 2,
+                    "BackWall"
+                );
+
+
+                /*
+                 * LEFT WALL
+                 */
+
+                self.mesh(
+                    shell,
+                    new THREE.BoxGeometry(
+                        wallThickness,
+                        d.height,
+                        d.depth
+                    ),
+                    materials[0],
+                    -d.width / 2,
+                    d.height / 2,
+                    0,
+                    "LeftWall"
+                );
+
+
+                /*
+                 * RIGHT WALL
+                 */
+
+                self.mesh(
+                    shell,
+                    new THREE.BoxGeometry(
+                        wallThickness,
+                        d.height,
+                        d.depth
+                    ),
+                    materials[2],
+                    d.width / 2,
+                    d.height / 2,
+                    0,
+                    "RightWall"
+                );
+
+
+                /*
+                 * FLOOR
+                 */
+
+                self.mesh(
+                    shell,
+                    new THREE.BoxGeometry(
+                        d.width,
+                        0.05,
+                        d.depth
+                    ),
+                    materials[3],
+                    0,
+                    0.025,
+                    0,
+                    "Floor"
+                );
+
+
+                /*
+                 * =================================================
+                 * CEILING
+                 * =================================================
+                 */
+
+                self.buildCeiling();
+
+
+                /*
+                 * =================================================
+                 * FRONT DOOR
+                 * =================================================
+                 */
+
+                self.buildDoor();
+
+
+                /*
+                 * =================================================
+                 * OPTIONAL COMPONENTS
+                 * =================================================
+                 */
+
+                return self.buildComponents(
+                    state,
+                    generationToken,
+                    tokenCheckCallback
+                );
+
+            });
+        };
 
 
     /*
      * ============================================================
      * CEILING
      * ============================================================
+     *
+     * Thiết kế theo yêu cầu:
+     *
+     * - nhiều lớp
+     * - shadow gap
+     * - khung âm
+     * - panel trung tâm
+     * - LED hắt
+     * - không bóng đèn lộ thiên
      */
 
-    Builder.prototype.buildCeiling = function () {
+    Builder.prototype.buildCeiling =
+        function () {
 
-        var dimensions = CONFIG.DIMENSIONS;
+            var d =
+                CONFIG.DIMENSIONS;
 
-        var group = new THREE.Group();
+            var g =
+                new THREE.Group();
 
-        group.name = 'ArchitecturalCeiling';
+            g.name =
+                "ArchitecturalCeiling";
 
-        this.root.add(group);
-
-
-        /*
-         * Outer ceiling.
-         */
-
-        var outerMaterial =
-            new THREE.MeshStandardMaterial({
-                color: 0xf3f0e9,
-                roughness: 0.72
-            });
+            this.root.add(g);
 
 
-        /*
-         * Shadow-gap.
-         */
-
-        var shadowMaterial =
-            new THREE.MeshStandardMaterial({
-                color: 0x373a3c,
-                metalness: 0.50,
-                roughness: 0.34
-            });
+            var outer =
+                new THREE.MeshStandardMaterial({
+                    color: 0xf3f0e9,
+                    roughness: 0.72
+                });
 
 
-        /*
-         * Inner recessed layer.
-         */
-
-        var innerMaterial =
-            new THREE.MeshStandardMaterial({
-                color: 0xe5e0d6,
-                roughness: 0.62
-            });
+            var inner =
+                new THREE.MeshStandardMaterial({
+                    color: 0xe5e0d6,
+                    roughness: 0.62
+                });
 
 
-        /*
-         * CNC central panel.
-         */
-
-        var cncMaterial =
-            new THREE.MeshStandardMaterial({
-                color: 0xb8b0a3,
-                metalness: 0.32,
-                roughness: 0.42
-            });
+            var dark =
+                new THREE.MeshStandardMaterial({
+                    color: 0x373a3c,
+                    metalness: 0.50,
+                    roughness: 0.34
+                });
 
 
-        /*
-         * Hidden ambient LED.
-         */
-
-        var glowMaterial =
-            new THREE.MeshStandardMaterial({
-                color: 0xfff8e8,
-                emissive: 0xffe5ad,
-                emissiveIntensity: 2.2
-            });
+            var cnc =
+                new THREE.MeshStandardMaterial({
+                    color: 0xb8b0a3,
+                    metalness: 0.32,
+                    roughness: 0.42
+                });
 
 
-        /*
-         * Outer layer.
-         */
-
-        this.mesh(
-            group,
-            new THREE.BoxGeometry(
-                dimensions.width - 0.08,
-                0.04,
-                dimensions.depth - 0.08
-            ),
-            outerMaterial,
-            0,
-            dimensions.height - 0.06,
-            0,
-            'CeilingOuter'
-        );
+            var glow =
+                new THREE.MeshStandardMaterial({
+                    color: 0xfff8e8,
+                    emissive: 0xffe5ad,
+                    emissiveIntensity: 2.2
+                });
 
 
-        /*
-         * Shadow gap.
-         */
-
-        this.mesh(
-            group,
-            new THREE.BoxGeometry(
-                dimensions.width - 0.24,
-                0.025,
-                dimensions.depth - 0.24
-            ),
-            shadowMaterial,
-            0,
-            dimensions.height - 0.035,
-            0,
-            'ShadowGap'
-        );
-
-
-        /*
-         * Inner recessed panel.
-         */
-
-        this.mesh(
-            group,
-            new THREE.BoxGeometry(
-                dimensions.width - 0.31,
-                0.025,
-                dimensions.depth - 0.31
-            ),
-            innerMaterial,
-            0,
-            dimensions.height - 0.012,
-            0,
-            'CeilingInner'
-        );
-
-
-        /*
-         * Central CNC decorative panel.
-         */
-
-        this.mesh(
-            group,
-            new THREE.BoxGeometry(
-                dimensions.width * 0.46,
-                0.016,
-                dimensions.depth * 0.42
-            ),
-            cncMaterial,
-            0,
-            dimensions.height + 0.004,
-            0,
-            'CentralCNC'
-        );
-
-
-        /*
-         * Hidden LED strips.
-         */
-
-        [-0.39, 0.39].forEach(function (x) {
+            /*
+             * OUTER FRAME
+             */
 
             this.mesh(
-                group,
+                g,
+                new THREE.BoxGeometry(
+                    d.width - 0.08,
+                    0.04,
+                    d.depth - 0.08
+                ),
+                outer,
+                0,
+                d.height - 0.06,
+                0,
+                "CeilingOuter"
+            );
+
+
+            /*
+             * SHADOW GAP
+             */
+
+            this.mesh(
+                g,
+                new THREE.BoxGeometry(
+                    d.width - 0.24,
+                    0.025,
+                    d.depth - 0.24
+                ),
+                dark,
+                0,
+                d.height - 0.035,
+                0,
+                "ShadowGap"
+            );
+
+
+            /*
+             * INNER PANEL
+             */
+
+            this.mesh(
+                g,
+                new THREE.BoxGeometry(
+                    d.width - 0.31,
+                    0.025,
+                    d.depth - 0.31
+                ),
+                inner,
+                0,
+                d.height - 0.012,
+                0,
+                "CeilingInner"
+            );
+
+
+            /*
+             * CENTRAL CNC PANEL
+             */
+
+            this.mesh(
+                g,
+                new THREE.BoxGeometry(
+                    d.width * 0.46,
+                    0.016,
+                    d.depth * 0.42
+                ),
+                cnc,
+                0,
+                d.height + 0.004,
+                0,
+                "CentralCNC"
+            );
+
+
+            /*
+             * HIDDEN LED LEFT / RIGHT
+             */
+
+            this.mesh(
+                g,
                 new THREE.BoxGeometry(
                     0.028,
                     0.012,
-                    dimensions.depth - 0.34
+                    d.depth - 0.34
                 ),
-                glowMaterial,
-                x,
-                dimensions.height + 0.014,
+                glow,
+                -0.39,
+                d.height + 0.014,
                 0,
-                'HiddenLED'
+                "HiddenLEDLeft"
             );
 
-        }, this);
-    };
+
+            this.mesh(
+                g,
+                new THREE.BoxGeometry(
+                    0.028,
+                    0.012,
+                    d.depth - 0.34
+                ),
+                glow,
+                0.39,
+                d.height + 0.014,
+                0,
+                "HiddenLEDRight"
+            );
+        };
 
 
     /*
      * ============================================================
      * DOOR
      * ============================================================
+     *
+     * QUAN TRỌNG:
+     *
+     * Cửa không còn rộng chỉ ~47% cabin.
+     *
+     * Opening gần toàn bộ chiều rộng cabin.
+     * Hai cánh gặp nhau chính xác tại tâm.
+     *
+     * Không tạo front wall phụ ở hai bên.
      */
 
-    Builder.prototype.buildDoor = function () {
+    Builder.prototype.buildDoor =
+        function () {
 
-        var dimensions = CONFIG.DIMENSIONS;
-
-        var width = dimensions.width * 0.235;
-        var height = dimensions.height * 0.87;
-
-        var z =
-            dimensions.depth / 2 - 0.045;
+            var d =
+                CONFIG.DIMENSIONS;
 
 
-        var doorMaterial =
-            new THREE.MeshStandardMaterial({
-                color: 0xbfc3c5,
-                metalness: 0.88,
-                roughness: 0.22
-            });
+            /*
+             * Cửa chiếm 92% chiều rộng cabin.
+             */
+
+            var openingWidth =
+                d.width * 0.92;
 
 
-        var frameMaterial =
-            new THREE.MeshStandardMaterial({
-                color: 0x2b2e31,
-                metalness: 0.65,
-                roughness: 0.30
-            });
+            var panelWidth =
+                openingWidth / 2;
 
 
-        var frame = new THREE.Group();
-
-        frame.name = 'DoorFrame';
-
-        this.root.add(frame);
+            var doorHeight =
+                d.height * 0.86;
 
 
-        /*
-         * Left frame.
-         */
-
-        this.mesh(
-            frame,
-            new THREE.BoxGeometry(
-                0.04,
-                height + 0.04,
-                0.055
-            ),
-            frameMaterial,
-            -dimensions.width / 2 + 0.02,
-            height / 2,
-            z + 0.035,
-            'FrameL'
-        );
+            var frontZ =
+                d.depth / 2 - 0.028;
 
 
-        /*
-         * Right frame.
-         */
-
-        this.mesh(
-            frame,
-            new THREE.BoxGeometry(
-                0.04,
-                height + 0.04,
-                0.055
-            ),
-            frameMaterial,
-            dimensions.width / 2 - 0.02,
-            height / 2,
-            z + 0.035,
-            'FrameR'
-        );
+            var doorMaterial =
+                new THREE.MeshStandardMaterial({
+                    color: 0xbfc3c5,
+                    metalness: 0.88,
+                    roughness: 0.22
+                });
 
 
-        /*
-         * Top frame.
-         */
-
-        this.mesh(
-            frame,
-            new THREE.BoxGeometry(
-                dimensions.width,
-                0.04,
-                0.055
-            ),
-            frameMaterial,
-            0,
-            height + 0.02,
-            z + 0.035,
-            'FrameTop'
-        );
+            var frameMaterial =
+                new THREE.MeshStandardMaterial({
+                    color: 0x2b2e31,
+                    metalness: 0.65,
+                    roughness: 0.30
+                });
 
 
-        /*
-         * Door panels.
-         */
+            /*
+             * KHÔNG tạo hai mảng vách nhỏ
+             * ở hai bên cửa.
+             *
+             * Chỉ giữ frame rất mảnh.
+             */
 
-        this.door.left = this.mesh(
-            this.root,
-            new THREE.BoxGeometry(
-                width,
-                height,
-                0.05
-            ),
-            doorMaterial,
-            -width / 2,
-            height / 2,
-            z,
-            'DoorLeft'
-        );
+            var frame =
+                new THREE.Group();
+
+            frame.name =
+                "DoorFrame";
+
+            this.root.add(frame);
 
 
-        this.door.right = this.mesh(
-            this.root,
-            new THREE.BoxGeometry(
-                width,
-                height,
-                0.05
-            ),
-            doorMaterial,
-            width / 2,
-            height / 2,
-            z,
-            'DoorRight'
-        );
+            /*
+             * LEFT FRAME
+             */
+
+            this.mesh(
+                frame,
+                new THREE.BoxGeometry(
+                    0.025,
+                    doorHeight + 0.06,
+                    0.055
+                ),
+                frameMaterial,
+                -openingWidth / 2,
+                doorHeight / 2,
+                frontZ + 0.035,
+                "DoorFrameLeft"
+            );
 
 
-        /*
-         * Default OPEN.
-         */
+            /*
+             * RIGHT FRAME
+             */
 
-        this.setDoorProgress(1);
-    };
+            this.mesh(
+                frame,
+                new THREE.BoxGeometry(
+                    0.025,
+                    doorHeight + 0.06,
+                    0.055
+                ),
+                frameMaterial,
+                openingWidth / 2,
+                doorHeight / 2,
+                frontZ + 0.035,
+                "DoorFrameRight"
+            );
+
+
+            /*
+             * TOP FRAME
+             */
+
+            this.mesh(
+                frame,
+                new THREE.BoxGeometry(
+                    openingWidth,
+                    0.025,
+                    0.055
+                ),
+                frameMaterial,
+                0,
+                doorHeight + 0.025,
+                frontZ + 0.035,
+                "DoorFrameTop"
+            );
+
+
+            /*
+             * =================================================
+             * LEFT DOOR
+             * =================================================
+             *
+             * Mép phải của cánh trái = tâm cabin.
+             */
+
+            this.door.left =
+                this.mesh(
+                    this.root,
+                    new THREE.BoxGeometry(
+                        panelWidth,
+                        doorHeight,
+                        0.055
+                    ),
+                    doorMaterial,
+                    -panelWidth / 2,
+                    doorHeight / 2,
+                    frontZ,
+                    "DoorLeft"
+                );
+
+
+            /*
+             * =================================================
+             * RIGHT DOOR
+             * =================================================
+             *
+             * Mép trái của cánh phải = tâm cabin.
+             */
+
+            this.door.right =
+                this.mesh(
+                    this.root,
+                    new THREE.BoxGeometry(
+                        panelWidth,
+                        doorHeight,
+                        0.055
+                    ),
+                    doorMaterial,
+                    panelWidth / 2,
+                    doorHeight / 2,
+                    frontZ,
+                    "DoorRight"
+                );
+
+
+            /*
+             * OPEN/CLOSE DEFAULT
+             */
+
+            this.setDoorProgress(1);
+        };
 
 
     /*
@@ -788,291 +746,329 @@ window.CabinBuilder = (function () {
      * ============================================================
      */
 
-    Builder.prototype.buildComponents = function (
-        state,
-        token,
-        isCurrent
-    ) {
-
-        var self = this;
-
-        var dimensions = CONFIG.DIMENSIONS;
-
-        var handrail =
-            this.findCatalog(
-                'HANDRAILS',
-                state.handrail
-            );
-
-        var cop =
-            this.findCatalog(
-                'COPS',
-                state.cop
-            );
-
-        var jobs = [];
-
-
-        /*
-         * Handrail.
-         */
-
-        if (
-            handrail &&
-            handrail.id !== 'NONE'
+    Builder.prototype.buildComponents =
+        function (
+            state,
+            generationToken,
+            tokenCheckCallback
         ) {
 
-            jobs.push(
-                self.assetOrFallback(
-                    handrail,
-                    'Handrail',
-                    new THREE.Vector3(
-                        0,
-                        dimensions.height * 0.43,
-                        -dimensions.depth / 2 + 0.08
-                    ),
-                    0.78,
-                    token,
-                    isCurrent
-                )
-            );
-        }
+            var d =
+                CONFIG.DIMENSIONS;
+
+            var handrail =
+                findCatalog(
+                    "HANDRAILS",
+                    state.handrail
+                );
+
+            var cop =
+                findCatalog(
+                    "COPS",
+                    state.cop
+                );
+
+            var jobs = [];
 
 
-        /*
-         * COP.
-         */
+            if (
+                handrail &&
+                handrail.id !== "NONE"
+            ) {
 
-        if (
-            cop &&
-            cop.id !== 'NONE'
-        ) {
-
-            jobs.push(
-                self.assetOrFallback(
-                    cop,
-                    'COP',
-                    new THREE.Vector3(
-                        dimensions.width / 2 - 0.08,
-                        dimensions.height * 0.52,
-                        0
-                    ),
-                    0.65,
-                    token,
-                    isCurrent
-                )
-            );
-        }
+                jobs.push(
+                    this.assetOrFallback(
+                        handrail,
+                        "Handrail",
+                        new THREE.Vector3(
+                            d.width * 0.16,
+                            d.height * 0.43,
+                            -d.depth / 2 + 0.08
+                        ),
+                        0.78,
+                        generationToken,
+                        tokenCheckCallback
+                    )
+                );
+            }
 
 
-        return Promise.all(jobs);
-    };
+            if (
+                cop &&
+                cop.id !== "NONE"
+            ) {
+
+                jobs.push(
+                    this.assetOrFallback(
+                        cop,
+                        "COP",
+                        new THREE.Vector3(
+                            d.width / 2 - 0.08,
+                            d.height * 0.52,
+                            0
+                        ),
+                        0.65,
+                        generationToken,
+                        tokenCheckCallback
+                    )
+                );
+            }
+
+
+            return Promise.all(jobs);
+        };
 
 
     /*
      * ============================================================
-     * GLB COMPONENT
+     * GLTF LOAD
      * ============================================================
      */
 
-    Builder.prototype.assetOrFallback = function (
-        item,
-        name,
-        position,
-        targetSize,
-        token,
-        isCurrent
-    ) {
+    Builder.prototype.load =
+        function (path) {
 
-        var self = this;
-
-        if (!item.modelPath) {
-            return Promise.resolve(
-                self.fallback(
-                    item,
-                    name,
-                    position
-                )
-            );
-        }
-
-
-        return this.load(item.modelPath)
-            .then(function (gltf) {
-
-                if (!isCurrent(token)) {
-                    return;
-                }
-
-                if (
-                    !gltf ||
-                    !gltf.scene
-                ) {
-                    throw new Error(
-                        'Invalid GLTF asset'
-                    );
-                }
-
-
-                var group =
-                    gltf.scene.clone(true);
-
-
-                var box =
-                    new THREE.Box3()
-                        .setFromObject(group);
-
-
-                var size =
-                    box.getSize(
-                        new THREE.Vector3()
-                    );
-
-
-                var center =
-                    box.getCenter(
-                        new THREE.Vector3()
-                    );
-
-
-                var max =
-                    Math.max(
-                        size.x,
-                        size.y,
-                        size.z
-                    ) || 1;
-
-
-                var scale =
-                    targetSize / max;
-
-
-                group.scale.setScalar(scale);
-
-
-                group.position.set(
-                    position.x - center.x * scale,
-                    position.y - center.y * scale,
-                    position.z - center.z * scale
+            if (!path) {
+                return Promise.reject(
+                    new Error("No asset path")
                 );
+            }
 
+            if (
+                this.gltfCache.has(path)
+            ) {
+                return this.gltfCache.get(path);
+            }
 
-                group.name =
-                    name + 'Asset';
+            var self = this;
 
+            var promise =
+                new Promise(function (
+                    resolve,
+                    reject
+                ) {
 
-                group.traverse(function (object) {
-
-                    if (object.isMesh) {
-                        object.castShadow = true;
-                        object.receiveShadow = true;
-                    }
-
+                    self.loader.load(
+                        path,
+                        resolve,
+                        undefined,
+                        reject
+                    );
                 });
 
 
-                self.root.add(group);
-            })
-            .catch(function () {
+            this.gltfCache.set(
+                path,
+                promise
+            );
 
-                if (isCurrent(token)) {
+            return promise;
+        };
 
+
+    /*
+     * ============================================================
+     * ASSET / FALLBACK
+     * ============================================================
+     */
+
+    Builder.prototype.assetOrFallback =
+        function (
+            item,
+            name,
+            position,
+            target,
+            generationToken,
+            tokenCheckCallback
+        ) {
+
+            var self = this;
+
+
+            if (!item.modelPath) {
+
+                if (
+                    !tokenCheckCallback ||
+                    tokenCheckCallback(
+                        generationToken
+                    )
+                ) {
                     self.fallback(
                         item,
                         name,
                         position
                     );
                 }
-            });
-    };
+
+                return Promise.resolve();
+            }
+
+
+            return this.load(
+                item.modelPath
+            )
+                .then(function (gltf) {
+
+                    if (
+                        tokenCheckCallback &&
+                        !tokenCheckCallback(
+                            generationToken
+                        )
+                    ) {
+                        return;
+                    }
+
+                    var g =
+                        gltf.scene.clone(true);
+
+                    var box =
+                        new THREE.Box3()
+                            .setFromObject(g);
+
+                    var size =
+                        box.getSize(
+                            new THREE.Vector3()
+                        );
+
+                    var center =
+                        box.getCenter(
+                            new THREE.Vector3()
+                        );
+
+                    var max =
+                        Math.max(
+                            size.x,
+                            size.y,
+                            size.z
+                        ) || 1;
+
+                    var scale =
+                        target / max;
+
+                    g.scale.setScalar(
+                        scale
+                    );
+
+                    g.position.set(
+                        position.x -
+                        center.x * scale,
+
+                        position.y -
+                        center.y * scale,
+
+                        position.z -
+                        center.z * scale
+                    );
+
+                    g.name =
+                        name + "Asset";
+
+                    g.traverse(function (o) {
+
+                        if (o.isMesh) {
+
+                            o.castShadow = true;
+                            o.receiveShadow = true;
+                        }
+                    });
+
+                    self.root.add(g);
+
+                })
+                .catch(function () {
+
+                    if (
+                        !tokenCheckCallback ||
+                        tokenCheckCallback(
+                            generationToken
+                        )
+                    ) {
+
+                        self.fallback(
+                            item,
+                            name,
+                            position
+                        );
+                    }
+                });
+        };
 
 
     /*
      * ============================================================
-     * FALLBACK COMPONENT
+     * FALLBACK
      * ============================================================
      */
 
-    Builder.prototype.fallback = function (
-        item,
-        name,
-        position
-    ) {
+    Builder.prototype.fallback =
+        function (
+            item,
+            name,
+            position
+        ) {
 
-        var group = new THREE.Group();
+            var g =
+                new THREE.Group();
 
-        group.name =
-            name + 'Fallback';
+            g.name =
+                name + "Fallback";
+
+            var material =
+                new THREE.MeshStandardMaterial({
+                    color:
+                        name === "COP"
+                            ? 0x202326
+                            : 0xc6c9cb,
+
+                    metalness: 0.78,
+                    roughness: 0.24
+                });
 
 
-        var material =
-            new THREE.MeshStandardMaterial({
-                color:
-                    name === 'COP'
-                        ? 0x202326
-                        : 0xc6c9cb,
-                metalness: 0.78,
-                roughness: 0.24
-            });
+            if (name === "Handrail") {
 
+                var bar =
+                    new THREE.Mesh(
+                        new THREE.CylinderGeometry(
+                            0.022,
+                            0.022,
+                            0.95,
+                            24
+                        ),
+                        material
+                    );
 
-        if (name === 'Handrail') {
+                bar.rotation.z =
+                    Math.PI / 2;
 
-            var bar =
-                new THREE.Mesh(
-                    new THREE.CylinderGeometry(
-                        0.022,
-                        0.022,
-                        1.0,
-                        24
-                    ),
-                    material
+                bar.position.copy(
+                    position
                 );
 
+                g.add(bar);
 
-            bar.rotation.z =
-                Math.PI / 2;
+            } else {
 
+                var panel =
+                    new THREE.Mesh(
+                        new THREE.BoxGeometry(
+                            0.12,
+                            0.55,
+                            0.035
+                        ),
+                        material
+                    );
 
-            bar.position.copy(
-                position
-            );
-
-
-            bar.castShadow = true;
-            bar.receiveShadow = true;
-
-            group.add(bar);
-
-        } else {
-
-            var panel =
-                new THREE.Mesh(
-                    new THREE.BoxGeometry(
-                        0.12,
-                        0.55,
-                        0.035
-                    ),
-                    material
+                panel.position.copy(
+                    position
                 );
 
-
-            panel.position.copy(
-                position
-            );
+                g.add(panel);
+            }
 
 
-            panel.castShadow = true;
-            panel.receiveShadow = true;
-
-            group.add(panel);
-        }
-
-
-        this.root.add(group);
-
-        return group;
-    };
+            this.root.add(g);
+        };
 
 
     /*
@@ -1080,72 +1076,129 @@ window.CabinBuilder = (function () {
      * DOOR PROGRESS
      * ============================================================
      *
+     * progress:
+     *
      * 0 = CLOSED
      * 1 = OPEN
      */
 
-    Builder.prototype.setDoorProgress = function (value) {
+    Builder.prototype.setDoorProgress =
+        function (progress) {
 
-        var progress =
-            Math.max(
-                0,
-                Math.min(
-                    1,
-                    Number(value)
-                )
-            );
-
-        if (!isFinite(progress)) {
-            progress = 1;
-        }
-
-        this.door.progress = progress;
+            var d =
+                CONFIG.DIMENSIONS;
 
 
-        if (
-            !this.door.left ||
-            !this.door.right
-        ) {
-            return;
-        }
+            this.door.progress =
+                Math.max(
+                    0,
+                    Math.min(
+                        1,
+                        progress
+                    )
+                );
 
 
-        var dimensions =
-            CONFIG.DIMENSIONS;
-
-        var width =
-            dimensions.width * 0.235;
-
-        var distance =
-            dimensions.width * 0.43;
+            if (
+                !this.door.left ||
+                !this.door.right
+            ) {
+                return;
+            }
 
 
-        this.door.left.position.x =
-            -width / 2 -
-            distance * progress;
+            var openingWidth =
+                d.width * 0.92;
+
+            var panelWidth =
+                openingWidth / 2;
 
 
-        this.door.right.position.x =
-            width / 2 +
-            distance * progress;
-    };
+            /*
+             * Khoảng trượt.
+             *
+             * Khi OPEN:
+             *
+             * cánh trái trượt hoàn toàn sang trái
+             * cánh phải trượt hoàn toàn sang phải.
+             */
+
+            var slide =
+                panelWidth * 0.92;
 
 
-    /*
-     * Compatibility alias.
-     */
+            /*
+             * CLOSED
+             */
 
-    Builder.prototype.updateDoorProgress =
-        function (value) {
-            this.setDoorProgress(value);
+            var leftClosed =
+                -panelWidth / 2;
+
+            var rightClosed =
+                panelWidth / 2;
+
+
+            /*
+             * OPEN
+             */
+
+            var leftOpen =
+                leftClosed - slide;
+
+            var rightOpen =
+                rightClosed + slide;
+
+
+            /*
+             * Interpolate.
+             */
+
+            this.door.left.position.x =
+                THREE.MathUtils.lerp(
+                    leftClosed,
+                    leftOpen,
+                    this.door.progress
+                );
+
+
+            this.door.right.position.x =
+                THREE.MathUtils.lerp(
+                    rightClosed,
+                    rightOpen,
+                    this.door.progress
+                );
         };
 
 
     /*
      * ============================================================
-     * RETURN PUBLIC CLASS
+     * COMPATIBILITY ALIASES
      * ============================================================
      */
+
+    Builder.prototype.buildCabin =
+        function (
+            state,
+            generationToken,
+            tokenCheckCallback
+        ) {
+
+            return this.updateCabin(
+                state,
+                generationToken,
+                tokenCheckCallback
+            );
+        };
+
+
+    Builder.prototype.updateDoorProgress =
+        function (progress) {
+
+            this.setDoorProgress(
+                progress
+            );
+        };
+
 
     return Builder;
 
