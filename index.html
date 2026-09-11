@@ -1,86 +1,78 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elevator Configurator - 3D Preview</title>
-    <link rel="stylesheet" href="style.css">
-    
-    <!-- Three.js r128 and dependencies (Global Scope) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lights/RectAreaLightUniformsLib.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elevator Configurator</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-    <div id="app-container">
-        <!-- Viewport Panel -->
-        <div id="viewport-panel">
-            <canvas id="webgl-canvas"></canvas>
-            
-            <div id="camera-toolbar">
-                <button class="btn-camera active" data-view="FRONT">Chính diện</button>
-                <button class="btn-camera" data-view="REAR">Vách sau</button>
-                <button class="btn-camera" data-view="LEFT">Vách trái</button>
-                <button class="btn-camera" data-view="RIGHT">Vách phải</button>
-                <button class="btn-camera" data-view="CEILING">Trần</button>
-                <button class="btn-camera" data-view="FLOOR">Sàn</button>
-            </div>
+  <div id="app-container">
+    <main id="viewport-panel">
+      <canvas id="webgl-canvas" aria-label="3D elevator preview"></canvas>
+      <div id="camera-toolbar" role="toolbar" aria-label="Góc nhìn">
+        <button class="btn-camera active" data-view="FRONT">Chính diện</button>
+        <button class="btn-camera" data-view="REAR">Vách sau</button>
+        <button class="btn-camera" data-view="LEFT">Vách trái</button>
+        <button class="btn-camera" data-view="RIGHT">Vách phải</button>
+        <button class="btn-camera" data-view="CEILING">Trần</button>
+        <button class="btn-camera" data-view="FLOOR">Sàn</button>
+      </div>
+      <button id="btn-toggle-door" class="action-btn" type="button">Đóng cửa</button>
+      <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+        <span id="loading-text">Đang dựng cabin 3D...</span>
+      </div>
+    </main>
 
-            <button id="btn-toggle-door" class="action-btn">Đóng cửa</button>
-
-            <div id="loading-overlay" class="hidden">
-                <div class="spinner"></div>
-                <span id="loading-text">Đang tải cấu hình 3D...</span>
-            </div>
+    <aside id="sidebar-panel">
+      <header class="sidebar-header">
+        <div>
+          <span class="eyebrow">ELEVATOR CONFIGURATOR</span>
+          <h1>Cấu hình Cabin</h1>
+          <p>Tùy chỉnh nội thất và xem trực tiếp trên mô hình 3D.</p>
         </div>
+      </header>
 
-        <!-- Sidebar Panel -->
-        <div id="sidebar-panel">
-            <div class="sidebar-header">
-                <h2>Cấu Hình Cabin Thang Máy</h2>
-                <p>Tùy chỉnh chi tiết nội thất & vật liệu</p>
-            </div>
+      <div id="config-panels"></div>
 
-            <div id="config-panels">
-                <!-- Panels rendered dynamically by ui.js -->
-            </div>
-
-            <div class="sidebar-footer">
-                <div class="price-container">
-                    <span>Tổng chi phí ước tính:</span>
-                    <span id="total-price">0 VNĐ</span>
-                </div>
-                <div class="action-group">
-                    <button id="btn-quote" class="btn-primary">Yêu cầu báo giá</button>
-                    <button id="btn-share" class="btn-secondary">Chia sẻ</button>
-                    <button id="btn-save" class="btn-secondary">Lưu</button>
-                    <button id="btn-reset" class="btn-outline">Đặt lại</button>
-                </div>
-            </div>
+      <footer class="sidebar-footer">
+        <div class="price-container">
+          <span>Tổng chi phí ước tính</span>
+          <strong id="total-price">0 VNĐ</strong>
         </div>
+        <div class="action-group">
+          <button id="btn-quote" class="btn-primary" type="button">Yêu cầu báo giá</button>
+          <button id="btn-share" class="btn-secondary" type="button">Chia sẻ</button>
+          <button id="btn-save" class="btn-secondary" type="button">Lưu</button>
+          <button id="btn-reset" class="btn-outline" type="button">Đặt lại</button>
+        </div>
+      </footer>
+    </aside>
+  </div>
+
+  <div id="quote-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <button id="modal-close" class="close-btn" type="button" aria-label="Đóng">&times;</button>
+      <h2>Bảng báo giá chi tiết</h2>
+      <div id="quote-breakdown"></div>
+      <button id="btn-modal-submit" class="btn-primary" type="button">Gửi thông tin</button>
     </div>
+  </div>
 
-    <!-- Quote Modal -->
-    <div id="quote-modal" class="modal hidden">
-        <div class="modal-content">
-            <span id="modal-close" class="close-btn">&times;</span>
-            <h3>Bảng Báo Giá Chi Tiết</h3>
-            <div id="quote-breakdown"></div>
-            <button class="btn-primary" onclick="alert('Cảm ơn bạn! Thông tin báo giá đã được gửi.')">Gửi thông tin</button>
-        </div>
-    </div>
+  <div id="toast" class="toast hidden" role="status"></div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="toast hidden"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lights/RectAreaLightUniformsLib.js"></script>
 
-    <!-- Application Scripts Sequence -->
-    <script src="config.js"></script>
-    <script src="materials.js"></script>
-    <script src="lighting.js"></script>
-    <script src="cabin.js"></script>
-    <script src="scene.js"></script>
-    <script src="ui.js"></script>
-    <script src="app.js"></script>
+  <script src="./config.js"></script>
+  <script src="./materials.js"></script>
+  <script src="./lighting.js"></script>
+  <script src="./cabin.js"></script>
+  <script src="./scene.js"></script>
+  <script src="./ui.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
