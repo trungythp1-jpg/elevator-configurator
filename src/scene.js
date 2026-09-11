@@ -1,86 +1,72 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+window.SceneManager = (function () {
+    function SceneManager(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x0f0f0f);
 
-export class SceneManager {
-  constructor(container) {
-    this.container = container;
+        this.camera = new THREE.PerspectiveCamera(45, this.getAspectRatio(), 0.1, 100);
+        this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: false });
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.outputEncoding = THREE.sRGBEncoding;
 
-    // 1. Renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(this.renderer.domElement);
-
-    // 2. Scene
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xf4f6f8);
-
-    // 3. Camera Frontal Showroom View
-    this.camera = new THREE.PerspectiveCamera(38, container.clientWidth / container.clientHeight, 0.1, 100);
-    this.setPresetView('front');
-
-    // 4. Orbit Controls (Giới hạn kiểm soát)
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    this.controls.enableZoom = false; // Tắt zoom tự do ở demo
-    this.controls.enablePan = false;  // Tắt pan
-    this.controls.maxPolarAngle = Math.PI / 2 + 0.05; // Không chui xuống sàn
-
-    window.addEventListener('resize', () => this.onWindowResize());
-  }
-
-  setPresetView(preset) {
-    const target = new THREE.Vector3(0, 1.2, 0);
-    let camPos = new THREE.Vector3();
-
-    switch (preset) {
-      case 'front':
-        camPos.set(0, 1.2, -4.2);
-        break;
-      case 'left':
-        camPos.set(-3.2, 1.2, -2.2);
-        break;
-      case 'right':
-        camPos.set(3.2, 1.2, -2.2);
-        break;
-      case 'ceiling':
-        camPos.set(0, 0.2, -1.8);
-        target.set(0, 2.2, 0);
-        break;
-      case 'floor':
-        camPos.set(0, 2.2, -1.8);
-        target.set(0, 0.1, 0);
-        break;
+        this.setupResize();
+        this.setCameraView('FRONT');
     }
 
-    this.camera.position.copy(camPos);
-    this.camera.lookAt(target);
-    if (this.controls) this.controls.target.copy(target);
-  }
+    SceneManager.prototype.getAspectRatio = function () {
+        const width = this.canvas.clientWidth || window.innerWidth;
+        const height = this.canvas.clientHeight || window.innerHeight;
+        return height > 0 ? width / height : 1.0;
+    };
 
-  rotateCamera(angle) {
-    const x = this.camera.position.x;
-    const z = this.camera.position.z;
-    this.camera.position.x = x * Math.cos(angle) - z * Math.sin(angle);
-    this.camera.position.z = x * Math.sin(angle) + z * Math.cos(angle);
-    this.camera.lookAt(0, 1.2, 0);
-  }
+    SceneManager.prototype.setupResize = function () {
+        window.addEventListener('resize', () => {
+            const width = this.canvas.clientWidth;
+            const height = this.canvas.clientHeight;
+            if (height === 0) return;
 
-  onWindowResize() {
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
-  }
+            this.camera.aspect = width / height;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(width, height, false);
+        });
+    };
 
-  render() {
-    this.controls.update();
-    this.renderer.render(this.scene, this.camera);
-  }
-}
+    SceneManager.prototype.setCameraView = function (viewName) {
+        const dims = window.CONFIG.DIMENSIONS;
+        const target = new THREE.Vector3(0, dims.height / 2, 0);
+
+        switch (viewName) {
+            case 'FRONT':
+                this.camera.position.set(0, dims.height / 2, dims.depth * 2.2);
+                break;
+            case 'REAR':
+                this.camera.position.set(0, dims.height / 2, -dims.depth * 0.8);
+                break;
+            case 'LEFT':
+                this.camera.position.set(-dims.width * 0.8, dims.height / 2, 0);
+                break;
+            case 'RIGHT':
+                this.camera.position.set(dims.width * 0.8, dims.height / 2, 0);
+                break;
+            case 'CEILING':
+                this.camera.position.set(0, dims.height * 0.3, 0.1);
+                target.set(0, dims.height, 0);
+                break;
+            case 'FLOOR':
+                this.camera.position.set(0, dims.height * 0.8, 0.1);
+                target.set(0, 0, 0);
+                break;
+            default:
+                this.camera.position.set(0, dims.height / 2, dims.depth * 2.2);
+        }
+
+        this.camera.lookAt(target);
+    };
+
+    SceneManager.prototype.render = function () {
+        this.renderer.render(this.scene, this.camera);
+    };
+
+    return SceneManager;
+})();
