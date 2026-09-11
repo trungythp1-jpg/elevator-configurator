@@ -9,52 +9,19 @@
                 )
             );
 
-        /*
-         * Generation token.
-         *
-         * Mỗi lần rebuild sẽ tăng token.
-         * Các promise cũ sẽ tự vô hiệu hóa.
-         */
 
         this.token = 0;
-
-        /*
-         * Door animation frame.
-         */
 
         this.animation = null;
 
 
-        /*
-         * ========================================================
-         * THREE SCENE
-         * ========================================================
-         */
-
-        var canvas =
-            document.getElementById(
-                'webgl-canvas'
-            );
-
-
-        if (!canvas) {
-            throw new Error(
-                'Elevator Configurator: #webgl-canvas not found'
-            );
-        }
-
-
         this.scene =
             new SceneManager(
-                canvas
+                document.getElementById(
+                    "webgl-canvas"
+                )
             );
 
-
-        /*
-         * ========================================================
-         * LIGHTING
-         * ========================================================
-         */
 
         this.lighting =
             new LightingManager(
@@ -62,23 +29,11 @@
             );
 
 
-        /*
-         * ========================================================
-         * CABIN
-         * ========================================================
-         */
-
         this.cabin =
             new CabinBuilder(
                 this.scene.scene
             );
 
-
-        /*
-         * ========================================================
-         * UI
-         * ========================================================
-         */
 
         this.ui =
             new UIManager();
@@ -91,136 +46,148 @@
      * ============================================================
      */
 
-    App.prototype.valid = function (raw) {
+    App.prototype.valid =
+        function (raw) {
 
-        var state =
-            JSON.parse(
-                JSON.stringify(
-                    CONFIG.DEFAULT_STATE
-                )
-            );
-
-
-        if (
-            !raw ||
-            typeof raw !== 'object' ||
-            Array.isArray(raw)
-        ) {
-            return state;
-        }
-
-
-        var groups = {
-
-            cabinModel: 'CABIN_MODELS',
-
-            wallLeft: 'WALLS',
-            wallBack: 'WALLS',
-            wallRight: 'WALLS',
-
-            material: 'MATERIALS',
-
-            etched: 'ETCHEDS',
-
-            floor: 'FLOORS',
-
-            ceiling: 'CEILINGS',
-
-            handrail: 'HANDRAILS',
-
-            cop: 'COPS',
-
-            lighting: 'LIGHTINGS',
-
-            colorTone: 'COLORS'
-        };
-
-
-        Object.keys(groups).forEach(
-            function (key) {
-
-                var value =
-                    raw[key];
-
-                var list =
-                    CONFIG.CATALOGS[
-                        groups[key]
-                    ] || [];
-
-
-                if (
-                    list.some(
-                        function (item) {
-                            return item.id === value;
-                        }
+            var s =
+                JSON.parse(
+                    JSON.stringify(
+                        CONFIG.DEFAULT_STATE
                     )
-                ) {
-                    state[key] =
-                        value;
-                }
+                );
+
+
+            if (
+                !raw ||
+                typeof raw !== "object" ||
+                Array.isArray(raw)
+            ) {
+                return s;
             }
-        );
 
 
-        /*
-         * Wall mode
-         */
+            var groups = {
 
-        if (
-            raw.wallMode === 'SAME' ||
-            raw.wallMode === 'INDEPENDENT'
-        ) {
-            state.wallMode =
-                raw.wallMode;
-        }
+                cabinModel:
+                    "CABIN_MODELS",
 
+                wallLeft:
+                    "WALLS",
 
-        /*
-         * Custom color
-         */
+                wallBack:
+                    "WALLS",
 
-        if (
-            /^#[0-9a-f]{6}$/i.test(
-                raw.customColor || ''
-            )
-        ) {
-            state.customColor =
-                raw.customColor;
-        }
+                wallRight:
+                    "WALLS",
 
+                material:
+                    "MATERIALS",
 
-        /*
-         * Door state
-         */
+                etched:
+                    "ETCHEDS",
 
-        if (
-            raw.doorState === 'OPEN' ||
-            raw.doorState === 'CLOSED'
-        ) {
-            state.doorState =
-                raw.doorState;
-        }
+                floor:
+                    "FLOORS",
 
+                ceiling:
+                    "CEILINGS",
 
-        /*
-         * SAME mode:
-         * all three walls follow wallLeft.
-         */
+                handrail:
+                    "HANDRAILS",
 
-        if (
-            state.wallMode === 'SAME'
-        ) {
+                cop:
+                    "COPS",
 
-            state.wallBack =
-                state.wallLeft;
+                lighting:
+                    "LIGHTINGS",
 
-            state.wallRight =
-                state.wallLeft;
-        }
+                colorTone:
+                    "COLORS"
+            };
 
 
-        return state;
-    };
+            Object.keys(groups)
+                .forEach(function (key) {
+
+                    var value =
+                        raw[key];
+
+                    var list =
+                        CONFIG.CATALOGS[
+                            groups[key]
+                        ] || [];
+
+
+                    for (
+                        var i = 0;
+                        i < list.length;
+                        i++
+                    ) {
+
+                        if (
+                            list[i].id === value
+                        ) {
+
+                            s[key] = value;
+
+                            break;
+                        }
+                    }
+
+                });
+
+
+            if (
+                raw.wallMode === "SAME" ||
+                raw.wallMode === "INDEPENDENT"
+            ) {
+
+                s.wallMode =
+                    raw.wallMode;
+            }
+
+
+            if (
+                /^#[0-9a-f]{6}$/i
+                    .test(
+                        raw.customColor || ""
+                    )
+            ) {
+
+                s.customColor =
+                    raw.customColor;
+            }
+
+
+            if (
+                raw.doorState === "OPEN" ||
+                raw.doorState === "CLOSED"
+            ) {
+
+                s.doorState =
+                    raw.doorState;
+            }
+
+
+            /*
+             * SAME:
+             * vách trái là nguồn.
+             */
+
+            if (
+                s.wallMode === "SAME"
+            ) {
+
+                s.wallBack =
+                    s.wallLeft;
+
+                s.wallRight =
+                    s.wallLeft;
+            }
+
+
+            return s;
+        };
 
 
     /*
@@ -229,457 +196,416 @@
      * ============================================================
      */
 
-    App.prototype.loadState = function () {
+    App.prototype.loadState =
+        function () {
 
-        var encoded =
-            new URLSearchParams(
-                location.search
-            ).get('config');
-
-
-        /*
-         * Shared URL configuration
-         */
-
-        if (encoded) {
-
-            try {
-
-                var decoded =
-                    decodeURIComponent(
-                        escape(
-                            atob(encoded)
-                        )
-                    );
-
-
-                this.state =
-                    this.valid(
-                        JSON.parse(decoded)
-                    );
-
-
-                return;
-
-            } catch (error) {
-
-                console.warn(
-                    'Invalid shared configuration:',
-                    error
+            var params =
+                new URLSearchParams(
+                    location.search
                 );
+
+
+            var encoded =
+                params.get("config");
+
+
+            if (encoded) {
+
+                try {
+
+                    this.state =
+                        this.valid(
+                            JSON.parse(
+                                decodeURIComponent(
+                                    escape(
+                                        atob(encoded)
+                                    )
+                                )
+                            )
+                        );
+
+                    return;
+
+                } catch (e) {
+
+                    console.warn(
+                        "Invalid shared configuration",
+                        e
+                    );
+
+                }
+
             }
-        }
 
 
-        /*
-         * Local saved configuration
-         */
+            var saved =
+                localStorage.getItem(
+                    "elevator_config_state"
+                );
 
-        var saved =
-            localStorage.getItem(
-                'elevator_config_state'
+
+            if (saved) {
+
+                try {
+
+                    this.state =
+                        this.valid(
+                            JSON.parse(saved)
+                        );
+
+                } catch (e) {
+
+                    localStorage.removeItem(
+                        "elevator_config_state"
+                    );
+
+                }
+
+            }
+
+        };
+
+
+    /*
+     * ============================================================
+     * BIND EVENTS
+     * ============================================================
+     */
+
+    App.prototype.bind =
+        function () {
+
+            var self = this;
+
+
+            this.ui.on(
+                "camera",
+                function (view) {
+
+                    self.scene
+                        .setCameraPreset(
+                            view
+                        );
+
+                }
             );
 
 
-        if (saved) {
+            this.ui.on(
+                "select",
+                function (option) {
 
-            try {
-
-                this.state =
-                    this.valid(
-                        JSON.parse(saved)
-                    );
-
-            } catch (error) {
-
-                console.warn(
-                    'Invalid saved configuration:',
-                    error
-                );
-
-                localStorage.removeItem(
-                    'elevator_config_state'
-                );
-            }
-        }
-    };
+                    self.state[
+                        option.key
+                    ] = option.value;
 
 
-    /*
-     * ============================================================
-     * EVENT BINDING
-     * ============================================================
-     */
+                    /*
+                     * SAME:
+                     * vách trái điều khiển
+                     * cả 3 vách.
+                     */
 
-    App.prototype.bind = function () {
+                    if (
+                        option.key ===
+                            "wallMode" &&
+                        option.value ===
+                            "SAME"
+                    ) {
 
-        var self = this;
+                        self.state.wallBack =
+                            self.state.wallLeft;
 
-
-        /*
-         * Camera
-         */
-
-        this.ui.on(
-            'camera',
-            function (view) {
-
-                self.scene.setCameraPreset(
-                    view
-                );
-            }
-        );
+                        self.state.wallRight =
+                            self.state.wallLeft;
+                    }
 
 
-        /*
-         * Configuration selection
-         */
+                    if (
+                        option.key ===
+                            "wallLeft" &&
+                        self.state.wallMode ===
+                            "SAME"
+                    ) {
 
-        this.ui.on(
-            'select',
-            function (option) {
+                        self.state.wallBack =
+                            option.value;
 
-                if (
-                    !option ||
-                    !option.key
-                ) {
-                    return;
+                        self.state.wallRight =
+                            option.value;
+                    }
+
+
+                    self.rebuild();
+
                 }
+            );
 
 
-                self.state[
-                    option.key
-                ] = option.value;
+            this.ui.on(
+                "customColor",
+                function (hex) {
 
+                    self.state.customColor =
+                        hex;
 
-                /*
-                 * SAME mode
-                 */
+                    self.rebuild();
 
-                if (
-                    option.key === 'wallMode' &&
-                    option.value === 'SAME'
-                ) {
-
-                    self.state.wallBack =
-                        self.state.wallLeft;
-
-                    self.state.wallRight =
-                        self.state.wallLeft;
                 }
+            );
 
 
-                /*
-                 * Changing left wall while SAME:
-                 * synchronize all three walls.
-                 */
+            this.ui.on(
+                "door",
+                function () {
 
-                if (
-                    option.key === 'wallLeft' &&
-                    self.state.wallMode === 'SAME'
-                ) {
+                    self.toggleDoor();
 
-                    self.state.wallBack =
-                        option.value;
-
-                    self.state.wallRight =
-                        option.value;
                 }
+            );
 
 
-                self.rebuild();
-            }
-        );
+            this.ui.on(
+                "save",
+                function () {
 
-
-        /*
-         * Custom color
-         */
-
-        this.ui.on(
-            'customColor',
-            function (hex) {
-
-                if (
-                    !/^#[0-9a-f]{6}$/i.test(
-                        hex || ''
-                    )
-                ) {
-                    return;
-                }
-
-
-                self.state.customColor =
-                    hex;
-
-
-                self.rebuild();
-            }
-        );
-
-
-        /*
-         * Door
-         */
-
-        this.ui.on(
-            'door',
-            function () {
-                self.toggleDoor();
-            }
-        );
-
-
-        /*
-         * Save
-         */
-
-        this.ui.on(
-            'save',
-            function () {
-
-                localStorage.setItem(
-                    'elevator_config_state',
-                    JSON.stringify(
-                        self.state
-                    )
-                );
-
-
-                self.ui.toast(
-                    'Đã lưu cấu hình.'
-                );
-            }
-        );
-
-
-        /*
-         * Share
-         */
-
-        this.ui.on(
-            'share',
-            function () {
-                self.share();
-            }
-        );
-
-
-        /*
-         * Reset
-         */
-
-        this.ui.on(
-            'reset',
-            function () {
-
-                self.cancelAnimation();
-
-
-                self.token++;
-
-
-                self.state =
-                    JSON.parse(
+                    localStorage.setItem(
+                        "elevator_config_state",
                         JSON.stringify(
-                            CONFIG.DEFAULT_STATE
+                            self.state
                         )
                     );
 
 
-                localStorage.removeItem(
-                    'elevator_config_state'
-                );
+                    self.ui.toast(
+                        "Đã lưu cấu hình."
+                    );
+
+                }
+            );
 
 
-                history.replaceState(
-                    {},
-                    document.title,
-                    location.pathname
-                );
+            this.ui.on(
+                "share",
+                function () {
+
+                    self.share();
+
+                }
+            );
 
 
-                self.rebuild();
+            this.ui.on(
+                "reset",
+                function () {
+
+                    self.cancelAnimation();
 
 
-                self.ui.toast(
-                    'Đã đặt lại cấu hình.'
-                );
-            }
-        );
+                    self.state =
+                        JSON.parse(
+                            JSON.stringify(
+                                CONFIG.DEFAULT_STATE
+                            )
+                        );
 
 
-        /*
-         * Quote
-         */
-
-        this.ui.on(
-            'quote',
-            function () {
-                self.openQuote();
-            }
-        );
+                    localStorage.removeItem(
+                        "elevator_config_state"
+                    );
 
 
-        /*
-         * Close quote
-         */
-
-        this.ui.on(
-            'closeQuote',
-            function () {
-                self.ui.closeQuote();
-            }
-        );
+                    history.replaceState(
+                        {},
+                        document.title,
+                        location.pathname
+                    );
 
 
-        /*
-         * Submit quote
-         */
+                    self.rebuild();
 
-        this.ui.on(
-            'submitQuote',
-            function () {
 
-                self.ui.toast(
-                    'Thông tin báo giá đã được ghi nhận.'
-                );
-            }
-        );
-    };
+                    self.ui.toast(
+                        "Đã đặt lại cấu hình."
+                    );
+
+                }
+            );
+
+
+            this.ui.on(
+                "quote",
+                function () {
+
+                    self.openQuote();
+
+                }
+            );
+
+
+            this.ui.on(
+                "closeQuote",
+                function () {
+
+                    self.ui.closeQuote();
+
+                }
+            );
+
+
+            this.ui.on(
+                "submitQuote",
+                function () {
+
+                    self.ui.toast(
+                        "Thông tin báo giá đã được ghi nhận."
+                    );
+
+                }
+            );
+
+        };
 
 
     /*
      * ============================================================
-     * TOTAL PRICE
+     * PRICE
      * ============================================================
      */
 
-    App.prototype.total = function () {
+    App.prototype.total =
+        function () {
 
-        var state =
-            this.state;
+            var s =
+                this.state;
 
-        var catalogs =
-            CONFIG.CATALOGS;
-
-        var total = 0;
-
-
-        function price(
-            group,
-            id
-        ) {
-
-            var item =
-                (catalogs[group] || [])
-                    .find(
-                        function (entry) {
-                            return entry.id === id;
-                        }
-                    );
+            var catalogs =
+                CONFIG.CATALOGS;
 
 
-            return item
-                ? Number(item.price) || 0
-                : 0;
-        }
+            var total = 0;
 
 
-        /*
-         * Cabin
-         */
+            function price(
+                group,
+                id
+            ) {
 
-        total += price(
-            'CABIN_MODELS',
-            state.cabinModel
-        );
+                var list =
+                    catalogs[group] || [];
 
 
-        /*
-         * Walls
-         */
+                for (
+                    var i = 0;
+                    i < list.length;
+                    i++
+                ) {
 
-        if (
-            state.wallMode === 'SAME'
-        ) {
+                    if (
+                        list[i].id === id
+                    ) {
+
+                        return list[i].price || 0;
+                    }
+
+                }
+
+
+                return 0;
+            }
+
 
             total +=
                 price(
-                    'WALLS',
-                    state.wallLeft
-                ) * 3;
-
-        } else {
-
-            total +=
-                price(
-                    'WALLS',
-                    state.wallLeft
+                    "CABIN_MODELS",
+                    s.cabinModel
                 );
 
-            total +=
-                price(
-                    'WALLS',
-                    state.wallBack
-                );
 
-            total +=
-                price(
-                    'WALLS',
-                    state.wallRight
-                );
-        }
-
-
-        /*
-         * Remaining categories
-         */
-
-        [
-            [
-                'MATERIALS',
-                state.material
-            ],
-            [
-                'ETCHEDS',
-                state.etched
-            ],
-            [
-                'FLOORS',
-                state.floor
-            ],
-            [
-                'CEILINGS',
-                state.ceiling
-            ],
-            [
-                'HANDRAILS',
-                state.handrail
-            ],
-            [
-                'COPS',
-                state.cop
-            ],
-            [
-                'LIGHTINGS',
-                state.lighting
-            ]
-
-        ].forEach(
-            function (entry) {
+            if (
+                s.wallMode === "SAME"
+            ) {
 
                 total +=
                     price(
-                        entry[0],
-                        entry[1]
+                        "WALLS",
+                        s.wallLeft
+                    ) * 3;
+
+            } else {
+
+                total +=
+                    price(
+                        "WALLS",
+                        s.wallLeft
                     );
+
+                total +=
+                    price(
+                        "WALLS",
+                        s.wallBack
+                    );
+
+                total +=
+                    price(
+                        "WALLS",
+                        s.wallRight
+                    );
+
             }
-        );
 
 
-        return total;
-    };
+            total +=
+                price(
+                    "MATERIALS",
+                    s.material
+                );
+
+
+            total +=
+                price(
+                    "ETCHEDS",
+                    s.etched
+                );
+
+
+            total +=
+                price(
+                    "FLOORS",
+                    s.floor
+                );
+
+
+            total +=
+                price(
+                    "CEILINGS",
+                    s.ceiling
+                );
+
+
+            total +=
+                price(
+                    "HANDRAILS",
+                    s.handrail
+                );
+
+
+            total +=
+                price(
+                    "COPS",
+                    s.cop
+                );
+
+
+            total +=
+                price(
+                    "LIGHTINGS",
+                    s.lighting
+                );
+
+
+            return total;
+        };
 
 
     /*
@@ -688,183 +614,225 @@
      * ============================================================
      */
 
-    App.prototype.rebuild = function () {
+    App.prototype.rebuild =
+        function () {
 
-        var self = this;
-
-
-        /*
-         * New generation.
-         */
-
-        var token =
-            ++this.token;
+            var self = this;
 
 
-        /*
-         * Stop door animation.
-         */
-
-        this.cancelAnimation();
+            var token =
+                ++this.token;
 
 
-        /*
-         * Update UI immediately.
-         */
-
-        this.ui.render(
-            this.state
-        );
+            this.cancelAnimation();
 
 
-        this.ui.loading(
-            true,
-            'Đang dựng cabin 3D…'
-        );
+            this.ui.render(
+                this.state
+            );
 
 
-        this.ui.doorButton(
-            this.state.doorState
-        );
+            this.ui.loading(
+                true,
+                "Đang dựng cabin 3D…"
+            );
 
 
-        /*
-         * ========================================================
-         * LIGHTING
-         * ========================================================
-         *
-         * LightingManager expects ID:
-         *
-         * L01 / L02 / L03 / L04
-         */
-
-        self.lighting.updateLighting(
-            self.state.lighting
-        );
+            this.ui.doorButton(
+                this.state.doorState
+            );
 
 
-        /*
-         * ========================================================
-         * CABIN BUILD
-         * ========================================================
-         *
-         * CabinBuilder contract:
-         *
-         * build(
-         *     state,
-         *     token,
-         *     isCurrent
-         * )
-         *
-         * isCurrent must be supplied because CabinBuilder
-         * checks asynchronous generation validity.
-         */
+            /*
+             * ====================================================
+             * LIGHTING
+             * ====================================================
+             */
 
-        this.cabin.build(
-            this.state,
-            token,
-            function (generation) {
+            var lightingId =
+                this.state.lighting;
+
+
+            if (
+                this.lighting.updateLighting
+            ) {
+
+                this.lighting.updateLighting(
+                    lightingId
+                );
+
+            } else if (
+                this.lighting.applyPreset
+            ) {
+
+                var list =
+                    CONFIG.CATALOGS
+                        .LIGHTINGS || [];
+
+
+                var item = null;
+
+
+                for (
+                    var i = 0;
+                    i < list.length;
+                    i++
+                ) {
+
+                    if (
+                        list[i].id ===
+                        lightingId
+                    ) {
+
+                        item = list[i];
+
+                        break;
+                    }
+
+                }
+
+
+                if (item) {
+
+                    this.lighting.applyPreset(
+                        item
+                    );
+
+                }
+
+            }
+
+
+            /*
+             * ====================================================
+             * GENERATION TOKEN
+             * ====================================================
+             */
+
+            var generationToken = {
+                cancelled: false,
+                id: token
+            };
+
+
+            /*
+             * Callback kiểm tra generation.
+             */
+
+            function isCurrent(
+                currentToken
+            ) {
 
                 return (
-                    generation ===
-                    self.token
+                    currentToken &&
+                    currentToken.id ===
+                        self.token &&
+                    currentToken.cancelled !== true
                 );
             }
-        )
-
-        .then(
-            function () {
-
-                /*
-                 * Ignore stale generation.
-                 */
-
-                if (
-                    token !== self.token
-                ) {
-                    return;
-                }
 
 
-                /*
-                 * Set final door state.
-                 */
+            /*
+             * ====================================================
+             * BUILD
+             * ====================================================
+             */
 
-                self.cabin.setDoorProgress(
-                    self.state.doorState === 'OPEN'
-                        ? 1
-                        : 0
-                );
+            Promise.resolve()
+                .then(function () {
 
+                    return self.cabin.updateCabin(
+                        self.state,
+                        generationToken,
+                        isCurrent
+                    );
 
-                /*
-                 * Price.
-                 */
+                })
+                .then(function () {
 
-                self.ui.price(
-                    self.total()
-                );
-
-
-                /*
-                 * Hide loading.
-                 */
-
-                self.ui.loading(
-                    false
-                );
+                    if (
+                        token !== self.token
+                    ) {
+                        return;
+                    }
 
 
-                /*
-                 * Render.
-                 */
+                    /*
+                     * Door state.
+                     */
 
-                if (
-                    self.scene &&
-                    typeof self.scene.render === 'function'
-                ) {
-                    self.scene.render();
-                }
-            }
-        )
-
-        .catch(
-            function (error) {
-
-                if (
-                    token !== self.token
-                ) {
-                    return;
-                }
+                    self.cabin.setDoorProgress(
+                        self.state.doorState ===
+                            "OPEN"
+                            ? 1
+                            : 0
+                    );
 
 
-                console.error(
-                    'Elevator Configurator build error:',
-                    error
-                );
+                    /*
+                     * Price.
+                     */
+
+                    self.ui.price(
+                        self.total()
+                    );
 
 
-                self.ui.price(
-                    self.total()
-                );
+                    /*
+                     * Camera.
+                     */
+
+                    self.scene.setCameraPreset(
+                        "FRONT"
+                    );
 
 
-                self.ui.loading(
-                    false
-                );
+                    /*
+                     * Finish.
+                     */
+
+                    self.ui.loading(
+                        false
+                    );
+
+                })
+                .catch(function (error) {
+
+                    if (
+                        token !== self.token
+                    ) {
+                        return;
+                    }
 
 
-                self.ui.toast(
-                    'Có lỗi khi dựng cấu hình 3D.'
-                );
-            }
-        );
-    };
+                    console.error(
+                        "Elevator Configurator build error:",
+                        error
+                    );
+
+
+                    self.ui.price(
+                        self.total()
+                    );
+
+
+                    self.ui.loading(
+                        false
+                    );
+
+
+                    self.ui.toast(
+                        "Có lỗi khi dựng cấu hình 3D."
+                    );
+
+                });
+
+        };
 
 
     /*
      * ============================================================
-     * CANCEL DOOR ANIMATION
+     * CANCEL
      * ============================================================
      */
 
@@ -879,150 +847,122 @@
                     this.animation
                 );
 
-                this.animation =
-                    null;
+                this.animation = null;
             }
+
         };
 
 
     /*
      * ============================================================
-     * TOGGLE DOOR
+     * DOOR
      * ============================================================
      */
 
-    App.prototype.toggleDoor = function () {
+    App.prototype.toggleDoor =
+        function () {
 
-        var self = this;
-
-
-        /*
-         * CabinBuilder contract:
-         *
-         * door.left
-         * door.right
-         * door.progress
-         */
-
-        if (
-            !this.cabin ||
-            !this.cabin.door ||
-            !this.cabin.door.left ||
-            !this.cabin.door.right
-        ) {
-            return;
-        }
-
-
-        this.cancelAnimation();
-
-
-        var from =
-            Number(
-                this.cabin.door.progress
-            );
-
-
-        /*
-         * Current state OPEN means
-         * current door progress = 1.
-         *
-         * Toggle target:
-         *
-         * OPEN -> CLOSED = 0
-         * CLOSED -> OPEN = 1
-         */
-
-        var to =
-            this.state.doorState === 'OPEN'
-                ? 0
-                : 1;
-
-
-        var start =
-            performance.now();
-
-
-        var duration =
-            650;
-
-
-        /*
-         * Update logical state immediately.
-         */
-
-        this.state.doorState =
-            to === 1
-                ? 'OPEN'
-                : 'CLOSED';
-
-
-        this.ui.doorButton(
-            this.state.doorState
-        );
-
-
-        function step(now) {
-
-            var progress =
-                Math.min(
-                    1,
-                    (now - start) /
-                    duration
-                );
-
-
-            /*
-             * Smooth ease-in-out.
-             */
-
-            var eased =
-                progress < 0.5
-
-                    ? 2 *
-                      progress *
-                      progress
-
-                    : 1 -
-                      Math.pow(
-                          -2 * progress + 2,
-                          2
-                      ) / 2;
-
-
-            self.cabin.setDoorProgress(
-                from +
-                (to - from) *
-                eased
-            );
+            var self = this;
 
 
             if (
-                progress < 1
+                !this.cabin.door.left ||
+                !this.cabin.door.right
             ) {
 
-                self.animation =
-                    requestAnimationFrame(
-                        step
+                return;
+            }
+
+
+            this.cancelAnimation();
+
+
+            var from =
+                this.cabin.door.progress;
+
+
+            var to =
+                this.state.doorState ===
+                    "OPEN"
+                    ? 0
+                    : 1;
+
+
+            var start =
+                performance.now();
+
+
+            var duration =
+                650;
+
+
+            this.state.doorState =
+                to === 1
+                    ? "OPEN"
+                    : "CLOSED";
+
+
+            this.ui.doorButton(
+                this.state.doorState
+            );
+
+
+            function step(now) {
+
+                var progress =
+                    Math.min(
+                        1,
+                        (now - start) /
+                            duration
                     );
 
-            } else {
 
-                self.animation =
-                    null;
+                var eased =
+                    progress < 0.5
+                        ? 2 *
+                          progress *
+                          progress
+                        : 1 -
+                          Math.pow(
+                              -2 *
+                                  progress +
+                                  2,
+                              2
+                          ) /
+                              2;
+
 
                 self.cabin.setDoorProgress(
-                    to
+                    from +
+                    (to - from) *
+                    eased
                 );
+
+
+                if (
+                    progress < 1
+                ) {
+
+                    self.animation =
+                        requestAnimationFrame(
+                            step
+                        );
+
+                } else {
+
+                    self.animation =
+                        null;
+                }
+
             }
-        }
 
 
-        this.animation =
-            requestAnimationFrame(
-                step
-            );
-    };
+            this.animation =
+                requestAnimationFrame(
+                    step
+                );
+
+        };
 
 
     /*
@@ -1051,40 +991,38 @@
                 var url =
                     location.origin +
                     location.pathname +
-                    '?config=' +
+                    "?config=" +
                     encoded;
 
 
                 if (
                     !navigator.clipboard
                 ) {
+
                     throw new Error(
-                        'clipboard unavailable'
+                        "clipboard"
                     );
+
                 }
 
 
-                await navigator.clipboard.writeText(
-                    url
-                );
+                await navigator.clipboard
+                    .writeText(url);
 
 
                 this.ui.toast(
-                    'Đã sao chép liên kết chia sẻ.'
+                    "Đã sao chép liên kết chia sẻ."
                 );
+
 
             } catch (error) {
 
-                console.warn(
-                    'Share error:',
-                    error
-                );
-
-
                 this.ui.toast(
-                    'Không thể sao chép liên kết trên trình duyệt này.'
+                    "Không thể sao chép liên kết trên trình duyệt này."
                 );
+
             }
+
         };
 
 
@@ -1097,11 +1035,15 @@
     App.prototype.openQuote =
         function () {
 
-            var state =
+            var self = this;
+
+            var s =
                 this.state;
+
 
             var catalogs =
                 CONFIG.CATALOGS;
+
 
             var rows = [];
 
@@ -1111,13 +1053,27 @@
                 id
             ) {
 
-                return (
-                    catalogs[group] || []
-                ).find(
-                    function (item) {
-                        return item.id === id;
+                var list =
+                    catalogs[group] || [];
+
+
+                for (
+                    var i = 0;
+                    i < list.length;
+                    i++
+                ) {
+
+                    if (
+                        list[i].id === id
+                    ) {
+
+                        return list[i];
                     }
-                );
+
+                }
+
+
+                return null;
             }
 
 
@@ -1136,178 +1092,174 @@
 
                 if (
                     item &&
-                    Number(item.price) > 0
+                    item.price > 0
                 ) {
 
                     rows.push({
+
                         label:
                             label +
-                            ' — ' +
+                            " — " +
                             item.name,
 
                         price:
-                            Number(item.price)
+                            item.price
+
                     });
+
                 }
+
             }
 
 
-            /*
-             * Cabin
-             */
-
             add(
-                'Mẫu cabin',
-                'CABIN_MODELS',
-                state.cabinModel
+                "Mẫu cabin",
+                "CABIN_MODELS",
+                s.cabinModel
             );
 
 
-            /*
-             * Walls
-             */
-
-            var leftWall =
+            var wall =
                 find(
-                    'WALLS',
-                    state.wallLeft
+                    "WALLS",
+                    s.wallLeft
                 );
 
 
             if (
-                leftWall &&
-                Number(leftWall.price) > 0
+                wall &&
+                wall.price > 0
             ) {
 
                 rows.push({
 
                     label:
-                        state.wallMode === 'SAME'
-
-                            ? '3 vách — ' +
-                              leftWall.name
-
-                            : 'Vách trái — ' +
-                              leftWall.name,
+                        s.wallMode ===
+                            "SAME"
+                            ? "3 vách — " +
+                              wall.name
+                            : "Vách trái — " +
+                              wall.name,
 
                     price:
-                        Number(leftWall.price) *
+                        wall.price *
                         (
-                            state.wallMode === 'SAME'
+                            s.wallMode ===
+                                "SAME"
                                 ? 3
                                 : 1
                         )
+
                 });
+
             }
 
-
-            /*
-             * Independent walls
-             */
 
             if (
-                state.wallMode === 'INDEPENDENT'
+                s.wallMode ===
+                "INDEPENDENT"
             ) {
 
-                var backWall =
+                var back =
                     find(
-                        'WALLS',
-                        state.wallBack
+                        "WALLS",
+                        s.wallBack
                     );
 
 
-                var rightWall =
+                var right =
                     find(
-                        'WALLS',
-                        state.wallRight
+                        "WALLS",
+                        s.wallRight
                     );
 
 
                 if (
-                    backWall &&
-                    Number(backWall.price) > 0
+                    back &&
+                    back.price > 0
                 ) {
 
                     rows.push({
 
                         label:
-                            'Vách sau — ' +
-                            backWall.name,
+                            "Vách sau — " +
+                            back.name,
 
                         price:
-                            Number(backWall.price)
+                            back.price
+
                     });
+
                 }
 
 
                 if (
-                    rightWall &&
-                    Number(rightWall.price) > 0
+                    right &&
+                    right.price > 0
                 ) {
 
                     rows.push({
 
                         label:
-                            'Vách phải — ' +
-                            rightWall.name,
+                            "Vách phải — " +
+                            right.name,
 
                         price:
-                            Number(rightWall.price)
+                            right.price
+
                     });
+
                 }
+
             }
 
 
-            /*
-             * Remaining categories
-             */
-
             add(
-                'Vật liệu',
-                'MATERIALS',
-                state.material
+                "Vật liệu",
+                "MATERIALS",
+                s.material
             );
 
 
             add(
-                'Hoa văn',
-                'ETCHEDS',
-                state.etched
+                "Hoa văn",
+                "ETCHEDS",
+                s.etched
             );
 
 
             add(
-                'Sàn',
-                'FLOORS',
-                state.floor
+                "Sàn",
+                "FLOORS",
+                s.floor
             );
 
 
             add(
-                'Trần',
-                'CEILINGS',
-                state.ceiling
+                "Trần",
+                "CEILINGS",
+                s.ceiling
             );
 
 
             add(
-                'Tay vịn',
-                'HANDRAILS',
-                state.handrail
+                "Tay vịn",
+                "HANDRAILS",
+                s.handrail
             );
 
 
             add(
-                'COP',
-                'COPS',
-                state.cop
+                "COP",
+                "COPS",
+                s.cop
             );
 
 
             add(
-                'Ánh sáng',
-                'LIGHTINGS',
-                state.lighting
+                "Ánh sáng",
+                "LIGHTINGS",
+                s.lighting
             );
 
 
@@ -1315,17 +1267,18 @@
                 rows,
                 this.total()
             );
+
         };
 
 
     /*
      * ============================================================
-     * BOOT
+     * INIT
      * ============================================================
      */
 
     document.addEventListener(
-        'DOMContentLoaded',
+        "DOMContentLoaded",
         function () {
 
             try {
@@ -1346,58 +1299,26 @@
 
 
                 /*
-                 * Initial camera.
+                 * Camera FRONT mới.
                  */
 
                 app.scene.setCameraPreset(
-                    'FRONT'
+                    "FRONT"
                 );
 
 
-                /*
-                 * Initial build.
-                 */
-
                 app.rebuild();
+
 
             } catch (error) {
 
                 console.error(
-                    'Elevator Configurator initialization error:',
+                    "Elevator Configurator initialization error:",
                     error
                 );
 
-
-                var loading =
-                    document.getElementById(
-                        'loading-overlay'
-                    );
-
-
-                if (loading) {
-
-                    loading.classList.add(
-                        'hidden'
-                    );
-                }
-
-
-                var toast =
-                    document.getElementById(
-                        'toast'
-                    );
-
-
-                if (toast) {
-
-                    toast.textContent =
-                        'Không thể khởi tạo bộ cấu hình 3D. Vui lòng kiểm tra Console.';
-
-                    toast.classList.remove(
-                        'hidden'
-                    );
-                }
             }
+
         }
     );
 
