@@ -1,97 +1,23 @@
 <!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Elevator Configurator — 3D Showroom</title>
-  <link rel="stylesheet" href="style.css" />
-  <!-- Import Map cho Three.js chuẩn ES Module -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-      }
-    }
-  </script>
-</head>
-<body>
-  <div id="app">
-    <!-- HEADER -->
-    <header class="app-header">
-      <div class="brand">
-        <h1>ELEVATOR CONFIGURATOR</h1>
-        <p class="subtitle">THIẾT KẾ THANG MÁY THEO PHONG CÁCH CỦA BẠN</p>
-      </div>
-      <div class="header-actions">
-        <button id="btnSave" class="btn btn-secondary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-          Lưu mẫu
-        </button>
-        <button id="btnExport" class="btn btn-primary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Tải ảnh
-        </button>
-        <button id="btnQuote" class="btn btn-secondary">Báo giá</button>
-        <button id="btnShare" class="btn btn-secondary">Chia sẻ</button>
-      </div>
-    </header>
-
-    <!-- MAIN CONTAINER -->
-    <main class="app-body">
-      <!-- LEFT CATEGORY TOOLBAR -->
-      <nav class="category-toolbar" id="categoryToolbar">
-        <!-- Generates Dynamically -->
-      </nav>
-
-      <!-- OPTIONS SELECTION PANEL -->
-      <aside class="options-panel" id="optionsPanel">
-        <div class="panel-header">
-          <h2 id="panelTitle">Chọn tùy chỉnh</h2>
-        </div>
-        <div class="panel-content" id="panelContent">
-          <!-- Dynamic Content -->
-        </div>
-      </aside>
-
-      <!-- 3D VIEWPORT CONTAINER -->
-      <section class="viewport-section">
-        <!-- VIEW CONTROL OVERLAY -->
-        <div class="view-controls">
-          <div class="preset-group">
-            <button class="btn-chip active" data-preset="front">Mặt trước</button>
-            <button class="btn-chip" data-preset="left">Mặt trái</button>
-            <button class="btn-chip" data-preset="right">Mặt phải</button>
-            <button class="btn-chip" data-preset="ceiling">Trần</button>
-            <button class="btn-chip" data-preset="floor">Sàn</button>
-          </div>
-          <div class="action-group">
-            <button id="btnRotateLeft" class="btn-circle" title="Quay trái">↺</button>
-            <button id="btnToggleDoor" class="btn-chip" data-status="open">Đóng cửa</button>
-            <button id="btnRotateRight" class="btn-circle" title="Quay phải">↻</button>
-          </div>
-        </div>
-
-        <div id="canvasContainer" class="canvas-container"></div>
-        <div id="loadingSpinner" class="loading-overlay">
-          <div class="spinner"></div>
-          <span>Đang khởi tạo không gian 3D...</span>
-        </div>
-      </section>
-
-      <!-- RIGHT SUMMARY PANEL -->
-      <aside class="summary-panel">
-        <div class="panel-header">
-          <h2>Thông số cấu hình</h2>
-        </div>
-        <div class="summary-content" id="summaryContent">
-          <!-- Dynamic Summary -->
-        </div>
-      </aside>
-    </main>
-  </div>
-
-  <div id="toast" class="toast"></div>
-  <script type="module" src="app.js"></script>
-</body>
-</html>
+<html lang="vi"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elevator Configurator - 3D Preview</title><link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lights/RectAreaLightUniformsLib.js"></script>
+</head><body>
+<div id="app-container"><div id="viewport-panel"><canvas id="webgl-canvas"></canvas>
+<div id="camera-toolbar">
+<button class="btn-camera active" data-view="FRONT">Chính diện</button><button class="btn-camera" data-view="REAR">Vách sau</button>
+<button class="btn-camera" data-view="LEFT">Vách trái</button><button class="btn-camera" data-view="RIGHT">Vách phải</button>
+<button class="btn-camera" data-view="CEILING">Trần</button><button class="btn-camera" data-view="FLOOR">Sàn</button>
+</div><button id="btn-toggle-door" class="action-btn">Đóng cửa</button>
+<div id="loading-overlay" class="hidden"><div class="spinner"></div><span id="loading-text">Đang tải cấu hình 3D...</span></div>
+</div><div id="sidebar-panel"><div class="sidebar-header"><h2>Cấu Hình Cabin Thang Máy</h2><p>Tùy chỉnh chi tiết nội thất & vật liệu</p></div>
+<div id="config-panels"></div><div class="sidebar-footer"><div class="price-container"><span>Tổng chi phí ước tính:</span><span id="total-price">0 VNĐ</span></div>
+<div class="action-group"><button id="btn-quote" class="btn-primary">Yêu cầu báo giá</button><button id="btn-share" class="btn-secondary">Chia sẻ</button><button id="btn-save" class="btn-secondary">Lưu</button><button id="btn-reset" class="btn-outline">Đặt lại</button></div></div></div></div>
+<div id="quote-modal" class="modal hidden"><div class="modal-content"><span id="modal-close" class="close-btn">&times;</span><h3>Bảng Báo Giá Chi Tiết</h3><div id="quote-breakdown"></div><button class="btn-primary" onclick="alert('Cảm ơn bạn! Thông tin báo giá đã được gửi.')">Gửi thông tin</button></div></div>
+<div id="toast" class="toast hidden"></div>
+<script src="config.js"></script><script src="materials.js"></script><script src="lighting.js"></script><script src="cabin.js"></script><script src="scene.js"></script><script src="ui.js"></script><script src="app.js"></script>
+</body></html>
