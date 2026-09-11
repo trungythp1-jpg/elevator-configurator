@@ -1,166 +1,244 @@
-import { state, CATALOG, ASSETS_PATH } from './config.js';
-
-export class UIManager {
-  constructor(cabinBuilder, sceneManager) {
-    this.cabin = cabinBuilder;
-    this.scene = sceneManager;
-    this.activeCategory = 'walls';
-
-    this.initCategoryNav();
-    this.initViewControls();
-    this.initHeaderActions();
-    this.renderOptionsPanel();
-    this.updateSummary();
-  }
-
-  initCategoryNav() {
-    const nav = document.getElementById('categoryToolbar');
-    const categories = [
-      { id: 'cabin', name: 'Cabin', icon: '📦' },
-      { id: 'walls', name: 'Vách', icon: '🖼️' },
-      { id: 'floor', name: 'Sàn', icon: '📐' },
-      { id: 'ceiling', name: 'Trần', icon: '💡' },
-      { id: 'doors', name: 'Cửa', icon: '🚪' },
-      { id: 'handrails', name: 'Tay vịn', icon: '🥖' },
-      { id: 'cops', name: 'Bảng ĐK', icon: '🎛️' }
-    ];
-
-    nav.innerHTML = categories.map(cat => `
-      <button class="nav-item ${cat.id === this.activeCategory ? 'active' : ''}" data-cat="${cat.id}">
-        <span>${cat.icon}</span>
-        <span>${cat.name}</span>
-      </button>
-    `).join('');
-
-    nav.addEventListener('click', (e) => {
-      const btn = e.target.closest('.nav-item');
-      if (!btn) return;
-      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      this.activeCategory = btn.dataset.cat;
-      this.renderOptionsPanel();
-    });
-  }
-
-  renderOptionsPanel() {
-    const title = document.getElementById('panelTitle');
-    const content = document.getElementById('panelContent');
-
-    if (this.activeCategory === 'walls') {
-      title.textContent = 'Tùy chỉnh Vách Cabin';
-      content.innerHTML = `
-        <div class="mode-toggle">
-          <button class="mode-btn ${state.wallMode === 'sync' ? 'active' : ''}" id="btnSync">Đồng bộ 3 vách</button>
-          <button class="mode-btn ${state.wallMode === 'independent' ? 'active' : ''}" id="btnIndep">Độc lập từng vách</button>
-        </div>
-        <div class="cards-grid">
-          ${CATALOG.walls.map(w => `
-            <div class="option-card ${state.walls.back === w.code ? 'active' : ''}" data-code="${w.code}">
-              <div class="option-thumb" style="background-image: url('${ASSETS_PATH}walls/${w.code}.png'), linear-gradient(135deg, #ccc, #eee)"></div>
-              <div class="option-title">${w.name}</div>
-              <div class="option-code">${w.code}</div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-
-      document.getElementById('btnSync').onclick = () => { state.wallMode = 'sync'; this.renderOptionsPanel(); };
-      document.getElementById('btnIndep').onclick = () => { state.wallMode = 'independent'; this.renderOptionsPanel(); };
-
-    } else if (this.activeCategory === 'floor') {
-      title.textContent = 'Mẫu Sàn Cabin';
-      content.innerHTML = `
-        <div class="cards-grid">
-          ${CATALOG.floors.map(f => `
-            <div class="option-card ${state.floor === f.code ? 'active' : ''}" data-code="${f.code}">
-              <div class="option-thumb" style="background-image: url('${ASSETS_PATH}floor/${f.code}.png'), linear-gradient(135deg, #333, #666)"></div>
-              <div class="option-title">${f.name}</div>
-              <div class="option-code">${f.code}</div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    } else {
-      title.textContent = 'Tùy chọn cấu hình';
-      content.innerHTML = `<p style="font-size: 0.85rem; color: #6b7280;">Đã sẵn sàng tùy chỉnh thuộc tính sản phẩm.</p>`;
+window.UIManager = (function () {
+    function UIManager(app) {
+        this.app = app;
+        this.container = document.getElementById('config-panels');
+        this.totalPriceElem = document.getElementById('total-price');
+        this.doorBtn = document.getElementById('btn-toggle-door');
+        this.loadingOverlay = document.getElementById('loading-overlay');
+        this.quoteModal = document.getElementById('quote-modal');
+        this.quoteBreakdown = document.getElementById('quote-breakdown');
+        
+        this.bindGlobalEvents();
     }
 
-    this.bindCardEvents();
-  }
+    UIManager.prototype.bindGlobalEvents = function () {
+        // Camera Toolbar
+        const cameraButtons = document.querySelectorAll('.btn-camera[data-view]');
+        cameraButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                cameraButtons.forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                const view = e.target.getAttribute('data-view');
+                this.app.sceneManager.setCameraView(view);
+            });
+        });
 
-  bindCardEvents() {
-    document.querySelectorAll('.option-card').forEach(card => {
-      card.onclick = () => {
-        const code = card.dataset.code;
-        if (this.activeCategory === 'walls') {
-          if (state.wallMode === 'sync') {
-            state.walls.left = state.walls.back = state.walls.right = code;
-          } else {
-            state.walls.back = code;
-          }
-        } else if (this.activeCategory === 'floor') {
-          state.floor = code;
+        // Door Toggle Button
+        if (this.doorBtn) {
+            this.doorBtn.addEventListener('click', () => {
+                const current = this.app.state.doorState;
+                const next = current === 'OPEN' ? 'CLOSED' : 'OPEN';
+                this.app.updateDoorState(next);
+            });
         }
-        this.cabin.updateMaterials();
-        this.renderOptionsPanel();
-        this.updateSummary();
-      };
-    });
-  }
 
-  initViewControls() {
-    document.querySelectorAll('[data-preset]').forEach(btn => {
-      btn.onclick = (e) => {
-        document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        this.scene.setPresetView(e.target.dataset.preset);
-      };
-    });
-
-    document.getElementById('btnRotateLeft').onclick = () => this.scene.rotateCamera(Math.PI / 12);
-    document.getElementById('btnRotateRight').onclick = () => this.scene.rotateCamera(-Math.PI / 12);
-
-    const btnDoor = document.getElementById('btnToggleDoor');
-    btnDoor.onclick = () => {
-      state.doorState = state.doorState === 'open' ? 'closed' : 'open';
-      btnDoor.textContent = state.doorState === 'open' ? 'Đóng cửa' : 'Mở cửa';
-      this.cabin.animateDoor();
-    };
-  }
-
-  initHeaderActions() {
-    document.getElementById('btnSave').onclick = () => {
-      localStorage.setItem('elevator_config', JSON.stringify(state));
-      this.showToast('Đã lưu cấu hình thành công!');
+        // Action Buttons
+        document.getElementById('btn-reset')?.addEventListener('click', () => this.app.resetConfig());
+        document.getElementById('btn-save')?.addEventListener('click', () => this.app.saveConfig());
+        document.getElementById('btn-share')?.addEventListener('click', () => this.app.shareConfig());
+        document.getElementById('btn-quote')?.addEventListener('click', () => this.showQuoteModal());
+        document.getElementById('modal-close')?.addEventListener('click', () => this.quoteModal.classList.add('hidden'));
     };
 
-    document.getElementById('btnExport').onclick = () => {
-      const dataURL = this.scene.renderer.domElement.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = `Elevator-Config-${Date.now()}.png`;
-      link.href = dataURL;
-      link.click();
-      this.showToast('Đã xuất file ảnh Canvas thành công!');
+    UIManager.prototype.renderAll = function () {
+        if (!this.container) return;
+        this.container.innerHTML = '';
+
+        const catalogs = window.CONFIG.CATALOGS;
+        const state = this.app.state;
+
+        // Cabin Models
+        this.renderSection('Mẫu Cabin', catalogs.CABIN_MODELS, state.cabinModel, (id) => this.app.updateState({ cabinModel: id }));
+
+        // Wall Mode
+        this.renderWallModeSection();
+
+        // Walls
+        if (state.wallMode === 'SAME') {
+            this.renderSection('Vách Cabin (Tất cả)', catalogs.WALLS, state.wallLeft, (id) => {
+                this.app.updateState({ wallLeft: id, wallBack: id, wallRight: id });
+            });
+        } else {
+            this.renderSection('Vách Trái', catalogs.WALLS, state.wallLeft, (id) => this.app.updateState({ wallLeft: id }));
+            this.renderSection('Vách Sau', catalogs.WALLS, state.wallBack, (id) => this.app.updateState({ wallBack: id }));
+            this.renderSection('Vách Phải', catalogs.WALLS, state.wallRight, (id) => this.app.updateState({ wallRight: id }));
+        }
+
+        // Material
+        this.renderSection('Chất Liệu Inox', catalogs.MATERIALS, state.material, (id) => this.app.updateState({ material: id }));
+
+        // Color & Custom Hex
+        this.renderColorSection();
+
+        // Etched Pattern
+        this.renderSection('Hoa Văn Etched', catalogs.ETCHEDS, state.etched, (id) => this.app.updateState({ etched: id }));
+
+        // Floor
+        this.renderSection('Sàn Cabin', catalogs.FLOORS, state.floor, (id) => this.app.updateState({ floor: id }));
+
+        // Ceiling
+        this.renderSection('Trần Cabin', catalogs.CEILINGS, state.ceiling, (id) => this.app.updateState({ ceiling: id }));
+
+        // Handrail
+        this.renderSection('Tay Vịn', catalogs.HANDRAILS, state.handrail, (id) => this.app.updateState({ handrail: id }));
+
+        // COP
+        this.renderSection('Bảng Điều Khiển (COP)', catalogs.COPS, state.cop, (id) => this.app.updateState({ cop: id }));
+
+        // Lighting
+        this.renderSection('Hệ Thống Chiếu Sáng', catalogs.LIGHTINGS, state.lighting, (id) => this.app.updateState({ lighting: id }));
+
+        this.updatePriceDisplay();
+        this.syncDoorButton();
     };
-  }
 
-  updateSummary() {
-    const summary = document.getElementById('summaryContent');
-    summary.innerHTML = `
-      <div class="summary-item"><span>Mẫu Cabin</span><span>${state.cabin}</span></div>
-      <div class="summary-item"><span>Vách Trái</span><span>${state.walls.left}</span></div>
-      <div class="summary-item"><span>Vách Sau</span><span>${state.walls.back}</span></div>
-      <div class="summary-item"><span>Vách Phải</span><span>${state.walls.right}</span></div>
-      <div class="summary-item"><span>Sàn</span><span>${state.floor}</span></div>
-      <div class="summary-item"><span>Trần</span><span>${state.ceiling}</span></div>
-      <div class="summary-item"><span>Cửa</span><span>${state.door}</span></div>
-    `;
-  }
+    UIManager.prototype.renderSection = function (title, items, currentId, onSelect) {
+        const sec = document.createElement('div');
+        sec.className = 'config-section';
 
-  showToast(msg) {
-    const toast = document.getElementById('toast');
-    toast.textContent = msg;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
-  }
-}
+        const h3 = document.createElement('h3');
+        h3.innerText = title;
+        sec.appendChild(h3);
+
+        const grid = document.createElement('div');
+        grid.className = 'options-grid';
+
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = `option-card ${item.id === currentId ? 'selected' : ''}`;
+            
+            if (item.texturePath) {
+                const img = document.createElement('img');
+                img.className = 'option-thumb';
+                img.src = item.texturePath;
+                img.alt = item.name;
+                card.appendChild(img);
+            }
+
+            const name = document.createElement('div');
+            name.className = 'option-title';
+            name.innerText = item.name;
+            card.appendChild(name);
+
+            if (item.price > 0) {
+                const price = document.createElement('div');
+                price.className = 'option-price';
+                price.innerText = `+${item.price.toLocaleString('vi-VN')} VNĐ`;
+                card.appendChild(price);
+            }
+
+            card.addEventListener('click', () => onSelect(item.id));
+            grid.appendChild(card);
+        });
+
+        sec.appendChild(grid);
+        this.container.appendChild(sec);
+    };
+
+    UIManager.prototype.renderWallModeSection = function () {
+        const sec = document.createElement('div');
+        sec.className = 'config-section';
+        const h3 = document.createElement('h3');
+        h3.innerText = 'Chế Độ Chọn Vách';
+        sec.appendChild(h3);
+
+        const grid = document.createElement('div');
+        grid.className = 'options-grid';
+
+        const modes = [
+            { id: 'SAME', name: 'Đồng nhất 3 vách' },
+            { id: 'INDEPENDENT', name: 'Tùy chỉnh riêng' }
+        ];
+
+        modes.forEach(m => {
+            const card = document.createElement('div');
+            card.className = `option-card ${this.app.state.wallMode === m.id ? 'selected' : ''}`;
+            const name = document.createElement('div');
+            name.className = 'option-title';
+            name.innerText = m.name;
+            card.appendChild(name);
+
+            card.addEventListener('click', () => {
+                this.app.updateState({ wallMode: m.id });
+            });
+            grid.appendChild(card);
+        });
+
+        sec.appendChild(grid);
+        this.container.appendChild(sec);
+    };
+
+    UIManager.prototype.renderColorSection = function () {
+        const catalogs = window.CONFIG.CATALOGS;
+        this.renderSection('Tông Màu', catalogs.COLORS, this.app.state.colorTone, (id) => this.app.updateState({ colorTone: id }));
+
+        if (this.app.state.colorTone === 'CUSTOM') {
+            const sec = document.createElement('div');
+            sec.className = 'config-section color-input-container';
+
+            const label = document.createElement('label');
+            label.innerText = 'Màu tùy chỉnh: ';
+            
+            const picker = document.createElement('input');
+            picker.type = 'color';
+            picker.value = this.app.state.customColor || '#ffffff';
+            picker.addEventListener('input', (e) => {
+                this.app.updateState({ customColor: e.target.value });
+            });
+
+            sec.appendChild(label);
+            sec.appendChild(picker);
+            this.container.appendChild(sec);
+        }
+    };
+
+    UIManager.prototype.syncDoorButton = function () {
+        if (!this.doorBtn) return;
+        this.doorBtn.innerText = this.app.state.doorState === 'OPEN' ? 'Đóng cửa' : 'Mở cửa';
+    };
+
+    UIManager.prototype.updatePriceDisplay = function () {
+        if (this.totalPriceElem) {
+            const total = this.app.calculateTotalPrice();
+            this.totalPriceElem.innerText = `${total.toLocaleString('vi-VN')} VNĐ`;
+        }
+    };
+
+    UIManager.prototype.setLoading = function (loading) {
+        if (this.loadingOverlay) {
+            if (loading) this.loadingOverlay.classList.remove('hidden');
+            else this.loadingOverlay.classList.add('hidden');
+        }
+    };
+
+    UIManager.prototype.showToast = function (msg) {
+        const toast = document.getElementById('toast');
+        if (!toast) return;
+        toast.innerText = msg;
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 3000);
+    };
+
+    UIManager.prototype.showQuoteModal = function () {
+        if (!this.quoteModal || !this.quoteBreakdown) return;
+
+        const breakdown = this.app.getQuoteBreakdown();
+        let html = '<ul style="list-style:none; padding:0; margin-bottom:16px;">';
+        breakdown.items.forEach(item => {
+            html += `<li style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #333;">
+                <span>${item.label}</span>
+                <span>${item.price > 0 ? '+' + item.price.toLocaleString('vi-VN') + ' VNĐ' : 'Mặc định'}</span>
+            </li>`;
+        });
+        html += '</ul>';
+        html += `<div style="display:flex; justify-content:space-between; font-weight:bold; font-size:16px; margin-top:12px;">
+            <span>TỔNG CỘNG:</span>
+            <span style="color:#0088ff">${breakdown.total.toLocaleString('vi-VN')} VNĐ</span>
+        </div>`;
+
+        this.quoteBreakdown.innerHTML = html;
+        this.quoteModal.classList.remove('hidden');
+    };
+
+    return UIManager;
+})();
