@@ -51,15 +51,46 @@
   };
   App.prototype.rebuild=function(){
     var self=this,token=++this.token;
-    this.cancelAnimation();this.ui.render(this.state);this.ui.loading(true);this.ui.doorButton(this.state.doorState);this.lighting.updateLighting(this.state.lighting);
-    this.cabin.build(this.state,token,function(t){return t===self.token;}).then(function(){if(token!==self.token)return;self.cabin.setDoorProgress(self.state.doorState==="OPEN"?1:0);self.ui.price(self.total());self.ui.loading(false);}).catch(function(e){if(token!==self.token)return;console.error(e);self.ui.price(self.total());self.ui.loading(false);self.ui.toast("Có lỗi khi dựng cấu hình 3D.");});
+    this.cancelAnimation();
+    this.ui.render(this.state);
+    this.ui.loading(true);
+    this.ui.doorButton(this.state.doorState);
+    this.lighting.updateLighting(this.state.lighting);
+
+    this.cabin.buildCabin(this.state,token).then(function(){
+      if(token!==self.token)return;
+      self.cabin.updateDoorProgress(self.state.doorState==="OPEN"?1:0);
+      self.ui.price(self.total());
+      self.ui.loading(false);
+    }).catch(function(e){
+      if(token!==self.token)return;
+      console.error(e);
+      self.ui.price(self.total());
+      self.ui.loading(false);
+      self.ui.toast("Có lỗi khi dựng cấu hình 3D.");
+    });
   };
   App.prototype.cancelAnimation=function(){if(this.animation!==null){cancelAnimationFrame(this.animation);this.animation=null;}};
   App.prototype.toggleDoor=function(){
-    var self=this;if(!this.cabin.door.left||!this.cabin.door.right)return;
-    this.cancelAnimation();var from=this.cabin.door.progress,to=this.state.doorState==="OPEN"?0:1,start=performance.now(),dur=650;
-    this.state.doorState=to===1?"OPEN":"CLOSED";this.ui.doorButton(this.state.doorState);
-    function step(now){var x=Math.min(1,(now-start)/dur),e=x<.5?2*x*x:1-Math.pow(-2*x+2,2)/2;self.cabin.setDoorProgress(from+(to-from)*e);if(x<1)self.animation=requestAnimationFrame(step);else self.animation=null;}
+    var self=this;
+    if(!this.cabin.doorLeftMesh||!this.cabin.doorRightMesh)return;
+
+    this.cancelAnimation();
+    var from=this.cabin.doorProgress;
+    var to=this.state.doorState==="OPEN"?0:1;
+    var start=performance.now(),dur=650;
+
+    this.state.doorState=to===1?"OPEN":"CLOSED";
+    this.ui.doorButton(this.state.doorState);
+
+    function step(now){
+      var x=Math.min(1,(now-start)/dur);
+      var e=x<.5?2*x*x:1-Math.pow(-2*x+2,2)/2;
+      self.cabin.updateDoorProgress(from+(to-from)*e);
+      if(x<1)self.animation=requestAnimationFrame(step);
+      else self.animation=null;
+    }
+
     this.animation=requestAnimationFrame(step);
   };
   App.prototype.share=async function(){
