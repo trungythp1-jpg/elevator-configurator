@@ -1,23 +1,86 @@
 <!DOCTYPE html>
-<html lang="vi"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Elevator Configurator - 3D Preview</title><link rel="stylesheet" href="style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lights/RectAreaLightUniformsLib.js"></script>
-</head><body>
-<div id="app-container"><div id="viewport-panel"><canvas id="webgl-canvas"></canvas>
-<div id="camera-toolbar">
-<button class="btn-camera active" data-view="FRONT">Chính diện</button><button class="btn-camera" data-view="REAR">Vách sau</button>
-<button class="btn-camera" data-view="LEFT">Vách trái</button><button class="btn-camera" data-view="RIGHT">Vách phải</button>
-<button class="btn-camera" data-view="CEILING">Trần</button><button class="btn-camera" data-view="FLOOR">Sàn</button>
-</div><button id="btn-toggle-door" class="action-btn">Đóng cửa</button>
-<div id="loading-overlay" class="hidden"><div class="spinner"></div><span id="loading-text">Đang tải cấu hình 3D...</span></div>
-</div><div id="sidebar-panel"><div class="sidebar-header"><h2>Cấu Hình Cabin Thang Máy</h2><p>Tùy chỉnh chi tiết nội thất & vật liệu</p></div>
-<div id="config-panels"></div><div class="sidebar-footer"><div class="price-container"><span>Tổng chi phí ước tính:</span><span id="total-price">0 VNĐ</span></div>
-<div class="action-group"><button id="btn-quote" class="btn-primary">Yêu cầu báo giá</button><button id="btn-share" class="btn-secondary">Chia sẻ</button><button id="btn-save" class="btn-secondary">Lưu</button><button id="btn-reset" class="btn-outline">Đặt lại</button></div></div></div></div>
-<div id="quote-modal" class="modal hidden"><div class="modal-content"><span id="modal-close" class="close-btn">&times;</span><h3>Bảng Báo Giá Chi Tiết</h3><div id="quote-breakdown"></div><button class="btn-primary" onclick="alert('Cảm ơn bạn! Thông tin báo giá đã được gửi.')">Gửi thông tin</button></div></div>
-<div id="toast" class="toast hidden"></div>
-<script src="config.js"></script><script src="materials.js"></script><script src="lighting.js"></script><script src="cabin.js"></script><script src="scene.js"></script><script src="ui.js"></script><script src="app.js"></script>
-</body></html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elevator Configurator - 3D Preview</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Three.js r128 and dependencies (Global Scope) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lights/RectAreaLightUniformsLib.js"></script>
+</head>
+<body>
+    <div id="app-container">
+        <!-- Viewport Panel -->
+        <div id="viewport-panel">
+            <canvas id="webgl-canvas"></canvas>
+            
+            <div id="camera-toolbar">
+                <button class="btn-camera active" data-view="FRONT">Chính diện</button>
+                <button class="btn-camera" data-view="REAR">Vách sau</button>
+                <button class="btn-camera" data-view="LEFT">Vách trái</button>
+                <button class="btn-camera" data-view="RIGHT">Vách phải</button>
+                <button class="btn-camera" data-view="CEILING">Trần</button>
+                <button class="btn-camera" data-view="FLOOR">Sàn</button>
+            </div>
+
+            <button id="btn-toggle-door" class="action-btn">Đóng cửa</button>
+
+            <div id="loading-overlay" class="hidden">
+                <div class="spinner"></div>
+                <span id="loading-text">Đang tải cấu hình 3D...</span>
+            </div>
+        </div>
+
+        <!-- Sidebar Panel -->
+        <div id="sidebar-panel">
+            <div class="sidebar-header">
+                <h2>Cấu Hình Cabin Thang Máy</h2>
+                <p>Tùy chỉnh chi tiết nội thất & vật liệu</p>
+            </div>
+
+            <div id="config-panels">
+                <!-- Panels rendered dynamically by ui.js -->
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="price-container">
+                    <span>Tổng chi phí ước tính:</span>
+                    <span id="total-price">0 VNĐ</span>
+                </div>
+                <div class="action-group">
+                    <button id="btn-quote" class="btn-primary">Yêu cầu báo giá</button>
+                    <button id="btn-share" class="btn-secondary">Chia sẻ</button>
+                    <button id="btn-save" class="btn-secondary">Lưu</button>
+                    <button id="btn-reset" class="btn-outline">Đặt lại</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quote Modal -->
+    <div id="quote-modal" class="modal hidden">
+        <div class="modal-content">
+            <span id="modal-close" class="close-btn">&times;</span>
+            <h3>Bảng Báo Giá Chi Tiết</h3>
+            <div id="quote-breakdown"></div>
+            <button class="btn-primary" onclick="alert('Cảm ơn bạn! Thông tin báo giá đã được gửi.')">Gửi thông tin</button>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- Application Scripts Sequence -->
+    <script src="config.js"></script>
+    <script src="materials.js"></script>
+    <script src="lighting.js"></script>
+    <script src="cabin.js"></script>
+    <script src="scene.js"></script>
+    <script src="ui.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
