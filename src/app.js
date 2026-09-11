@@ -1,456 +1,330 @@
-(function(){
-  function App(){
-    this.state=JSON.parse(JSON.stringify(CONFIG.DEFAULT_STATE));
-    this.token=0;
-    this.animation=null;
-    this.scene=new SceneManager(document.getElementById("webgl-canvas"));
-    this.lighting=new LightingManager(this.scene.scene);
-    this.cabin=new CabinBuilder(this.scene.scene);
-    this.ui=new UIManager();
+/* ============================================================
+   GROVA ELEVATOR CONFIGURATOR
+   APPLICATION / STATE / PRICE / SHARE
+   ============================================================ */
+(function () {
+  function clone(obj) {
+    return JSON.parse(JSON.stringify(obj));
   }
 
-  App.prototype.valid=function(raw){
-    var s=JSON.parse(JSON.stringify(CONFIG.DEFAULT_STATE));
+  function App() {
+    this.state = clone(CONFIG.DEFAULT_STATE);
+    this.token = 0;
+    this.doorAnimation = null;
 
-    if(!raw||typeof raw!=="object"||Array.isArray(raw))return s;
+    this.scene = new SceneManager(document.getElementById("webgl-canvas"));
+    this.lighting = new LightingManager(this.scene.scene);
+    this.cabin = new CabinBuilder(this.scene);
+    this.ui = new UIManager();
+  }
 
-    var groups={
-      cabinModel:"CABIN_MODELS",
-      wallLeft:"WALLS",
-      wallBack:"WALLS",
-      wallRight:"WALLS",
-      panel12:"WALLS",
-      panel35:"WALLS",
-      panel4:"WALLS",
-      panel68:"WALLS",
-      panel7:"WALLS",
-      panel911:"WALLS",
-      panel10:"WALLS",
-      material:"MATERIALS",
-      etched:"ETCHEDS",
-      floor:"FLOORS",
-      ceiling:"CEILINGS",
-      handrail:"HANDRAILS",
-      cop:"COPS",
-      lighting:"LIGHTINGS",
-      colorTone:"COLORS"
+  App.prototype.catalogHas = function (group, id) {
+    return (CONFIG.CATALOGS[group] || []).some(function (x) { return x.id === id; });
+  };
+
+  App.prototype.valid = function (raw) {
+    var s = clone(CONFIG.DEFAULT_STATE);
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return s;
+
+    var simple = {
+      cabinModel:"CABIN_MODELS", material:"MATERIALS", etched:"ETCHEDS",
+      floor:"FLOORS", ceiling:"CEILINGS", handrail:"HANDRAILS",
+      cop:"COPS", lighting:"LIGHTINGS", colorTone:"COLORS"
     };
 
-    Object.keys(groups).forEach(function(k){
-      var v=raw[k];
-      var list=CONFIG.CATALOGS[groups[k]]||[];
-      if(list.some(function(x){return x.id===v;}))s[k]=v;
-    });
+    Object.keys(simple).forEach(function (key) {
+      if (this.catalogHas(simple[key], raw[key])) s[key] = raw[key];
+    }, this);
 
-    if(raw.wallMode==="SAME"||raw.wallMode==="INDEPENDENT"){
-      s.wallMode=raw.wallMode;
+    CONFIG.PANEL_TOPOLOGY.groups.forEach(function (g) {
+      if (this.catalogHas("WALLS", raw[g.key])) s[g.key] = raw[g.key];
+    }, this);
+
+    if (raw.wallMode === "SAME" || raw.wallMode === "INDEPENDENT") s.wallMode = raw.wallMode;
+    if (raw.doorState === "OPEN" || raw.doorState === "CLOSED") s.doorState = raw.doorState;
+    if (/^#[0-9a-f]{6}$/i.test(raw.customColor || "")) s.customColor = raw.customColor;
+
+    /* Legacy wall state is intentionally converted only once. */
+    if (raw.wallMode === "INDEPENDENT" && raw.wallLeft && raw.wallBack && raw.wallRight) {
+      if (this.catalogHas("WALLS", raw.wallLeft)) {
+        s.panel35 = raw.wallLeft; s.panel4 = raw.wallLeft;
+      }
+      if (this.catalogHas("WALLS", raw.wallBack)) {
+        s.panel68 = raw.wallBack; s.panel7 = raw.wallBack;
+      }
+      if (this.catalogHas("WALLS", raw.wallRight)) {
+        s.panel911 = raw.wallRight; s.panel10 = raw.wallRight;
+      }
     }
 
-    if(/^#[0-9a-f]{6}$/i.test(raw.customColor||"")){
-      s.customColor=raw.customColor;
-    }
-
-    if(raw.doorState==="OPEN"||raw.doorState==="CLOSED"){
-      s.doorState=raw.doorState;
-    }
-
-    var hasPanelState=
-      raw.panel12||raw.panel35||raw.panel4||
-      raw.panel68||raw.panel7||raw.panel911||raw.panel10;
-
-    if(!hasPanelState){
-      s.panel12=s.wallLeft;
-      s.panel35=s.wallLeft;
-      s.panel4=s.wallLeft;
-      s.panel68=s.wallBack;
-      s.panel7=s.wallBack;
-      s.panel911=s.wallRight;
-      s.panel10=s.wallRight;
-    }
-
-    if(s.wallMode==="SAME"){
-      var same=raw.panel12||raw.wallLeft||s.panel12;
-
-      s.panel12=same;
-      s.panel35=same;
-      s.panel4=same;
-      s.panel68=same;
-      s.panel7=same;
-      s.panel911=same;
-      s.panel10=same;
-
-      s.wallLeft=same;
-      s.wallBack=same;
-      s.wallRight=same;
+    if (s.wallMode === "SAME") {
+      /* SAME uses the first main-wall group as the source. */
+      s.panel35 = s.panel35 || CONFIG.DEFAULT_STATE.panel35;
+      s.panel4 = s.panel35;
+      s.panel68 = s.panel35;
+      s.panel7 = s.panel35;
+      s.panel911 = s.panel35;
+      s.panel10 = s.panel35;
     }
 
     return s;
   };
 
-  App.prototype.loadState=function(){
-    var q=new URLSearchParams(location.search).get("config");
+  App.prototype.loadState = function () {
+    var params = new URLSearchParams(location.search);
+    var encoded = params.get("config");
 
-    if(q){
-      try{
-        this.state=this.valid(JSON.parse(decodeURIComponent(escape(atob(q)))));
+    if (encoded) {
+      try {
+        var decoded = decodeURIComponent(escape(atob(encoded)));
+        this.state = this.valid(JSON.parse(decoded));
         return;
-      }catch(e){}
+      } catch (e) {
+        console.warn("Invalid shared configuration", e);
+      }
     }
 
-    var saved=localStorage.getItem("elevator_config_state");
-
-    if(saved){
-      try{
-        this.state=this.valid(JSON.parse(saved));
-      }catch(e){
-        localStorage.removeItem("elevator_config_state");
-      }
+    try {
+      var saved = localStorage.getItem("elevator_config_state");
+      if (saved) this.state = this.valid(JSON.parse(saved));
+    } catch (e2) {
+      localStorage.removeItem("elevator_config_state");
     }
   };
 
-  App.prototype.bind=function(){
-    var self=this;
+  App.prototype.setWallGroup = function (key, value) {
+    if (!this.catalogHas("WALLS", value)) return;
 
-    this.ui.on("camera",function(v){
-      self.scene.setCameraPreset(v);
+    if (this.state.wallMode === "SAME") {
+      ["panel35","panel4","panel68","panel7","panel911","panel10"].forEach(function (k) {
+        this.state[k] = value;
+      });
+    } else {
+      this.state[key] = value;
+    }
+  };
+
+  App.prototype.bind = function () {
+    var self = this;
+
+    this.ui.on("camera", function (view) {
+      self.scene.setCameraPreset(view);
     });
 
-    this.ui.on("select",function(o){
-      self.state[o.key]=o.value;
+    this.ui.on("select", function (o) {
+      if (!o || !o.key) return;
 
-      var panelKey=
-        o.key==="panel12"||
-        o.key==="panel35"||
-        o.key==="panel4"||
-        o.key==="panel68"||
-        o.key==="panel7"||
-        o.key==="panel911"||
-        o.key==="panel10";
-
-      if(o.key==="wallMode"&&o.value==="SAME"){
-        var same=self.state.panel12||self.state.wallLeft||"I03";
-
-        self.state.panel12=same;
-        self.state.panel35=same;
-        self.state.panel4=same;
-        self.state.panel68=same;
-        self.state.panel7=same;
-        self.state.panel911=same;
-        self.state.panel10=same;
-
-        self.state.wallLeft=same;
-        self.state.wallBack=same;
-        self.state.wallRight=same;
-      }
-
-      if(self.state.wallMode==="SAME"&&panelKey){
-        self.state.panel12=o.value;
-        self.state.panel35=o.value;
-        self.state.panel4=o.value;
-        self.state.panel68=o.value;
-        self.state.panel7=o.value;
-        self.state.panel911=o.value;
-        self.state.panel10=o.value;
-
-        self.state.wallLeft=o.value;
-        self.state.wallBack=o.value;
-        self.state.wallRight=o.value;
-      }
-
-      /* Tương thích với UI cũ nếu vẫn phát wallLeft/Back/Right. */
-      if(self.state.wallMode==="SAME"&&
-         (o.key==="wallLeft"||o.key==="wallBack"||o.key==="wallRight")){
-        self.state.panel12=o.value;
-        self.state.panel35=o.value;
-        self.state.panel4=o.value;
-        self.state.panel68=o.value;
-        self.state.panel7=o.value;
-        self.state.panel911=o.value;
-        self.state.panel10=o.value;
-
-        self.state.wallLeft=o.value;
-        self.state.wallBack=o.value;
-        self.state.wallRight=o.value;
+      if (CONFIG.PANEL_TOPOLOGY.groups.some(function (g) { return g.key === o.key; })) {
+        self.setWallGroup(o.key, o.value);
+      } else if (o.key === "wallMode") {
+        self.state.wallMode = o.value;
+        if (o.value === "SAME") {
+          var source = self.state.panel35;
+          ["panel4","panel68","panel7","panel911","panel10"].forEach(function (k) {
+            self.state[k] = source;
+          });
+        }
+      } else {
+        self.state[o.key] = o.value;
       }
 
       self.rebuild();
     });
 
-    this.ui.on("customColor",function(h){
-      self.state.customColor=h;
+    this.ui.on("customColor", function (hex) {
+      if (/^#[0-9a-f]{6}$/i.test(hex || "")) self.state.customColor = hex;
       self.rebuild();
     });
 
-    this.ui.on("door",function(){
-      self.toggleDoor();
+    this.ui.on("door", function () { self.toggleDoor(); });
+
+    this.ui.on("save", function () {
+      try {
+        localStorage.setItem("elevator_config_state", JSON.stringify(self.state));
+        self.ui.toast("Đã lưu cấu hình.");
+      } catch (e) {
+        self.ui.toast("Không thể lưu trên thiết bị này.");
+      }
     });
 
-    this.ui.on("save",function(){
-      localStorage.setItem(
-        "elevator_config_state",
-        JSON.stringify(self.state)
-      );
-      self.ui.toast("Đã lưu cấu hình.");
-    });
+    this.ui.on("share", function () { self.share(); });
 
-    this.ui.on("share",function(){
-      self.share();
-    });
-
-    this.ui.on("reset",function(){
-      self.cancelAnimation();
-      self.state=JSON.parse(
-        JSON.stringify(CONFIG.DEFAULT_STATE)
-      );
+    this.ui.on("reset", function () {
+      self.stopDoorAnimation();
+      self.state = clone(CONFIG.DEFAULT_STATE);
       localStorage.removeItem("elevator_config_state");
-      history.replaceState({},document.title,location.pathname);
+      history.replaceState({}, document.title, location.pathname);
       self.rebuild();
       self.ui.toast("Đã đặt lại cấu hình.");
     });
 
-    this.ui.on("quote",function(){
-      self.openQuote();
-    });
-
-    this.ui.on("closeQuote",function(){
-      self.ui.closeQuote();
-    });
-
-    this.ui.on("submitQuote",function(){
-      self.ui.toast("Thông tin báo giá đã được ghi nhận.");
+    this.ui.on("quote", function () { self.openQuote(); });
+    this.ui.on("closeQuote", function () { self.ui.closeQuote(); });
+    this.ui.on("submitQuote", function () {
+      self.ui.toast("Cấu hình đã sẵn sàng để gửi yêu cầu báo giá.");
     });
   };
 
-  App.prototype.total=function(){
-    var s=this.state;
-    var c=CONFIG.CATALOGS;
-    var t=0;
-
-    var price=function(g,id){
-      var list=c[g]||[];
-      for(var i=0;i<list.length;i++){
-        if(list[i].id===id)return Number(list[i].price)||0;
-      }
-      return 0;
-    };
-
-    t+=price("CABIN_MODELS",s.cabinModel);
-
-    /*
-     * 11 PANEL:
-     * 1+2=2, 3+5=2, 4=1, 6+8=2,
-     * 7=1, 9+11=2, 10=1 => 11 tấm.
-     */
-    t+=price("WALLS",s.panel12||s.wallLeft)*2;
-    t+=price("WALLS",s.panel35||s.wallLeft)*2;
-    t+=price("WALLS",s.panel4||s.wallLeft);
-    t+=price("WALLS",s.panel68||s.wallBack)*2;
-    t+=price("WALLS",s.panel7||s.wallBack);
-    t+=price("WALLS",s.panel911||s.wallRight)*2;
-    t+=price("WALLS",s.panel10||s.wallRight);
-
-    t+=price("MATERIALS",s.material);
-    t+=price("ETCHEDS",s.etched);
-    t+=price("FLOORS",s.floor);
-    t+=price("CEILINGS",s.ceiling);
-    t+=price("HANDRAILS",s.handrail);
-    t+=price("COPS",s.cop);
-    t+=price("LIGHTINGS",s.lighting);
-
-    return t;
+  App.prototype.price = function (group, id) {
+    var item = (CONFIG.CATALOGS[group] || []).find(function (x) { return x.id === id; });
+    return item ? Number(item.price || 0) : 0;
   };
 
-  App.prototype.rebuild=function(){
-    var self=this;
-    var token=++this.token;
+  App.prototype.total = function () {
+    var s = this.state;
+    var total = 0;
 
-    this.cancelAnimation();
+    total += this.price("CABIN_MODELS", s.cabinModel);
+
+    /* Exact physical-panel accounting: 11 panels. */
+    var counts = {};
+    [s.panel12,s.panel12,s.panel35,s.panel4,s.panel35,s.panel68,s.panel7,s.panel68,s.panel911,s.panel10,s.panel911]
+      .forEach(function (id) { counts[id] = (counts[id] || 0) + 1; });
+
+    Object.keys(counts).forEach(function (id) {
+      total += this.price("WALLS", id) * counts[id];
+    });
+
+    total += this.price("MATERIALS", s.material);
+    total += this.price("ETCHEDS", s.etched);
+    total += this.price("FLOORS", s.floor);
+    total += this.price("CEILINGS", s.ceiling);
+    total += this.price("HANDRAILS", s.handrail);
+    total += this.price("COPS", s.cop);
+    total += this.price("LIGHTINGS", s.lighting);
+
+    return total;
+  };
+
+  App.prototype.rebuild = function () {
+    var self = this;
+    var id = ++this.token;
+
     this.ui.render(this.state);
-    this.ui.loading(true);
+    this.ui.price(this.total());
     this.ui.doorButton(this.state.doorState);
+    this.ui.loading(true, "Đang dựng cabin 3D…", "Đang áp dụng cấu hình mới");
 
-    /*
-     * LightingManager hiện tại dùng API applyPreset(),
-     * không có updateLighting().
-     */
-    var lightingConfig=(CONFIG.CATALOGS.LIGHTINGS||[]).find(function(item){
-      return item.id===self.state.lighting;
+    this.lighting.updateLighting(this.state.lighting);
+
+    var buildPromise;
+    try {
+      buildPromise = this.cabin.updateCabin(this.state);
+    } catch (e) {
+      buildPromise = Promise.reject(e);
+    }
+
+    var timeout = new Promise(function (_, reject) {
+      setTimeout(function () { reject(new Error("3D build timeout")); }, 15000);
     });
 
-    if(lightingConfig){
-      self.lighting.applyPreset(lightingConfig);
-    }
-
-    /*
-     * CabinBuilder hiện tại dùng buildCabin(state, generationToken)
-     * và updateDoorProgress(progress).
-     */
-    var generationToken={
-      cancelled:false,
-      id:token
-    };
-
-    this.cabin.buildCabin(this.state,generationToken)
-      .then(function(){
-        if(token!==self.token)return;
-
-        self.cabin.updateDoorProgress(
-          self.state.doorState==="OPEN"?1:0
-        );
-
-        self.ui.price(self.total());
-        self.ui.loading(false);
-      })
-      .catch(function(e){
-        if(token!==self.token)return;
-
-        console.error(
-          "Elevator Configurator build error:",
-          e
-        );
-
-        try{
-          self.ui.price(self.total());
-        }catch(priceError){
-          console.error(
-            "Elevator Configurator price error:",
-            priceError
-          );
-        }
-
-        self.ui.loading(false);
-        self.ui.toast("Đã dựng cabin với asset dự phòng.");
-      });
+    Promise.race([buildPromise, timeout]).then(function () {
+      if (id !== self.token) return;
+      self.cabin.setDoorProgress(self.state.doorState === "OPEN" ? 1 : 0);
+      self.scene.setCameraPreset("FRONT");
+      self.ui.loading(false);
+    }).catch(function (error) {
+      if (id !== self.token) return;
+      console.error("Configurator build error:", error);
+      self.ui.loading(false);
+      self.ui.toast("3D có lỗi nhưng cấu hình vẫn được giữ.");
+    });
   };
 
-  App.prototype.cancelAnimation=function(){
-    if(this.animation!==null){
-      cancelAnimationFrame(this.animation);
-      this.animation=null;
+  App.prototype.stopDoorAnimation = function () {
+    if (this.doorAnimation) {
+      cancelAnimationFrame(this.doorAnimation);
+      this.doorAnimation = null;
     }
   };
 
-  App.prototype.toggleDoor=function(){
-    var self=this;
+  App.prototype.toggleDoor = function () {
+    var self = this;
+    this.stopDoorAnimation();
 
-    if(!this.cabin.doorLeftMesh||!this.cabin.doorRightMesh)return;
-
-    this.cancelAnimation();
-
-    var from=this.cabin.doorProgress;
-    var to=this.state.doorState==="OPEN"?0:1;
-    var start=performance.now();
-    var dur=650;
-
-    this.state.doorState=to===1?"OPEN":"CLOSED";
+    var start = this.cabin.doorProgress;
+    var end = this.state.doorState === "OPEN" ? 0 : 1;
+    this.state.doorState = end === 1 ? "OPEN" : "CLOSED";
     this.ui.doorButton(this.state.doorState);
 
-    function step(now){
-      var x=Math.min(1,(now-start)/dur);
-      var e=x<0.5
-        ?2*x*x
-        :1-Math.pow(-2*x+2,2)/2;
+    var t0 = performance.now();
+    var duration = 620;
 
-      self.cabin.updateDoorProgress(
-        from+(to-from)*e
-      );
-
-      if(x<1){
-        self.animation=requestAnimationFrame(step);
-      }else{
-        self.animation=null;
+    function frame(now) {
+      var p = Math.min(1, (now - t0) / duration);
+      var eased = p * (2 - p);
+      self.cabin.setDoorProgress(start + (end - start) * eased);
+      if (p < 1) {
+        self.doorAnimation = requestAnimationFrame(frame);
+      } else {
+        self.doorAnimation = null;
       }
     }
 
-    this.animation=requestAnimationFrame(step);
+    this.doorAnimation = requestAnimationFrame(frame);
   };
 
-  App.prototype.share=async function(){
-    try{
-      var encoded=btoa(
-        unescape(
-          encodeURIComponent(
-            JSON.stringify(this.state)
-          )
-        )
-      );
+  App.prototype.share = function () {
+    try {
+      var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(this.state))));
+      var url = location.origin + location.pathname + "?config=" + encoded;
 
-      var url=location.origin+
-        location.pathname+
-        "?config="+encoded;
-
-      if(!navigator.clipboard)throw new Error("clipboard");
-
-      await navigator.clipboard.writeText(url);
-      this.ui.toast("Đã sao chép liên kết chia sẻ.");
-    }catch(e){
-      this.ui.toast("Không thể sao chép liên kết trên trình duyệt này.");
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          window.__elevatorApp.ui.toast("Đã sao chép liên kết cấu hình.");
+        }).catch(function () {
+          prompt("Sao chép liên kết:", url);
+        });
+      } else {
+        prompt("Sao chép liên kết:", url);
+      }
+    } catch (e) {
+      this.ui.toast("Không thể tạo liên kết chia sẻ.");
     }
   };
 
-  App.prototype.openQuote=function(){
-    var s=this.state;
-    var c=CONFIG.CATALOGS;
-    var rows=[];
+  App.prototype.openQuote = function () {
+    var self = this;
+    var s = this.state;
+    var rows = [];
 
-    var find=function(g,id){
-      var list=c[g]||[];
-      for(var i=0;i<list.length;i++){
-        if(list[i].id===id)return list[i];
-      }
-      return null;
-    };
+    function add(label, group, id) {
+      var p = self.price(group, id);
+      rows.push({ label: label + " · " + id, priceText: self.ui.money(p) });
+    }
 
-    var add=function(label,g,id){
-      var x=find(g,id);
-      if(x&&Number(x.price)>0){
-        rows.push({
-          label:label+" — "+x.name,
-          price:Number(x.price)
-        });
-      }
-    };
-
-    add("Mẫu cabin","CABIN_MODELS",s.cabinModel);
-
-    [
-      ["Cánh gà cửa — Tấm 1 + 2","panel12",2],
-      ["Vách trái — Tấm 3 + 5","panel35",2],
-      ["Vách trái — Tấm 4","panel4",1],
-      ["Vách sau — Tấm 6 + 8","panel68",2],
-      ["Vách sau — Tấm 7","panel7",1],
-      ["Vách phải — Tấm 9 + 11","panel911",2],
-      ["Vách phải — Tấm 10","panel10",1]
-    ].forEach(function(g){
-      var x=find("WALLS",s[g[1]]);
-      if(x&&Number(x.price)>0){
-        rows.push({
-          label:g[0]+" — "+x.name+" × "+g[2],
-          price:Number(x.price)*g[2]
-        });
-      }
+    add("Cabin", "CABIN_MODELS", s.cabinModel);
+    CONFIG.PANEL_TOPOLOGY.groups.forEach(function (g) {
+      add(g.label, "WALLS", s[g.key]);
     });
+    add("Vật liệu", "MATERIALS", s.material);
+    add("Khắc", "ETCHEDS", s.etched);
+    add("Sàn", "FLOORS", s.floor);
+    add("Trần", "CEILINGS", s.ceiling);
+    add("Tay vịn", "HANDRAILS", s.handrail);
+    add("COP", "COPS", s.cop);
+    add("Ánh sáng", "LIGHTINGS", s.lighting);
 
-    add("Vật liệu","MATERIALS",s.material);
-    add("Hoa văn","ETCHEDS",s.etched);
-    add("Sàn","FLOORS",s.floor);
-    add("Trần","CEILINGS",s.ceiling);
-    add("Tay vịn","HANDRAILS",s.handrail);
-    add("COP","COPS",s.cop);
-    add("Ánh sáng","LIGHTINGS",s.lighting);
-
-    this.ui.quote(rows,this.total());
+    this.ui.showQuote(rows, this.total());
   };
 
-  document.addEventListener("DOMContentLoaded",function(){
-    var app=new App();
-
-    window.ElevatorConfigurator=app;
-
-    app.loadState();
-    app.bind();
-    app.ui.bind();
-    app.scene.setCameraPreset("FRONT");
-    app.rebuild();
+  window.addEventListener("DOMContentLoaded", function () {
+    try {
+      var app = new App();
+      window.__elevatorApp = app;
+      app.loadState();
+      app.bind();
+      app.ui.bind();
+      app.rebuild();
+    } catch (e) {
+      console.error("Elevator Configurator startup error:", e);
+      var overlay = document.getElementById("loading-overlay");
+      if (overlay) overlay.classList.add("ready");
+      var toast = document.getElementById("toast");
+      if (toast) {
+        toast.textContent = "Không thể khởi động bộ cấu hình 3D.";
+        toast.classList.remove("hidden");
+      }
+    }
   });
 })();
