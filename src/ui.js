@@ -35,11 +35,13 @@ window.UIManager = (function () {
             try {
                 fn(payload);
             } catch (error) {
+
                 console.error(
                     'UI event error:',
                     name,
                     error
                 );
+
             }
 
         });
@@ -83,17 +85,25 @@ window.UIManager = (function () {
                         document
                             .querySelectorAll('.btn-camera')
                             .forEach(function (item) {
-                                item.classList.remove('active');
+
+                                item.classList.remove(
+                                    'active'
+                                );
+
                             });
 
-                        button.classList.add('active');
+                        button.classList.add(
+                            'active'
+                        );
 
                         self.emit(
                             'camera',
                             button.dataset.view
                         );
+
                     }
                 );
+
             });
 
 
@@ -109,9 +119,12 @@ window.UIManager = (function () {
             doorButton.addEventListener(
                 'click',
                 function () {
+
                     self.emit('door');
+
                 }
             );
+
         }
 
 
@@ -127,9 +140,12 @@ window.UIManager = (function () {
             quoteButton.addEventListener(
                 'click',
                 function () {
+
                     self.emit('quote');
+
                 }
             );
+
         }
 
 
@@ -145,9 +161,12 @@ window.UIManager = (function () {
             shareButton.addEventListener(
                 'click',
                 function () {
+
                     self.emit('share');
+
                 }
             );
+
         }
 
 
@@ -163,9 +182,12 @@ window.UIManager = (function () {
             saveButton.addEventListener(
                 'click',
                 function () {
+
                     self.emit('save');
+
                 }
             );
+
         }
 
 
@@ -181,9 +203,12 @@ window.UIManager = (function () {
             resetButton.addEventListener(
                 'click',
                 function () {
+
                     self.emit('reset');
+
                 }
             );
+
         }
 
 
@@ -199,9 +224,12 @@ window.UIManager = (function () {
             modalClose.addEventListener(
                 'click',
                 function () {
+
                     self.emit('closeQuote');
+
                 }
             );
+
         }
 
 
@@ -217,9 +245,12 @@ window.UIManager = (function () {
             modalSubmit.addEventListener(
                 'click',
                 function () {
+
                     self.emit('submitQuote');
+
                 }
             );
+
         }
 
 
@@ -238,13 +269,21 @@ window.UIManager = (function () {
 
                     if (
                         event.target &&
-                        event.target.id === 'quote-modal'
+                        event.target.id ===
+                            'quote-modal'
                     ) {
-                        self.emit('closeQuote');
+
+                        self.emit(
+                            'closeQuote'
+                        );
+
                     }
+
                 }
             );
+
         }
+
     };
 
 
@@ -263,20 +302,27 @@ window.UIManager = (function () {
         disabled
     ) {
 
-        if (!root || !Array.isArray(items)) {
+        if (
+            !root ||
+            !Array.isArray(items)
+        ) {
             return;
         }
 
 
         var section =
-            document.createElement('section');
+            document.createElement(
+                'section'
+            );
 
         section.className =
             'config-section';
 
 
         var heading =
-            document.createElement('h3');
+            document.createElement(
+                'h3'
+            );
 
         heading.textContent =
             title;
@@ -287,7 +333,9 @@ window.UIManager = (function () {
 
 
         var grid =
-            document.createElement('div');
+            document.createElement(
+                'div'
+            );
 
         grid.className =
             'options-grid';
@@ -303,9 +351,12 @@ window.UIManager = (function () {
         items.forEach(function (item) {
 
             var card =
-                document.createElement('button');
+                document.createElement(
+                    'button'
+                );
 
-            card.type = 'button';
+            card.type =
+                'button';
 
             card.className =
                 'option-card' +
@@ -321,11 +372,15 @@ window.UIManager = (function () {
 
 
             /*
-             * Thumbnail
+             * ====================================================
+             * THUMBNAIL
+             * ====================================================
              */
 
             var thumb =
-                document.createElement('div');
+                document.createElement(
+                    'div'
+                );
 
 
             if (item.texturePath) {
@@ -335,7 +390,8 @@ window.UIManager = (function () {
 
                 thumb.style.backgroundImage =
                     'url("' +
-                    item.texturePath.replace(/"/g, '') +
+                    item.texturePath
+                        .replace(/"/g, '') +
                     '")';
 
             } else {
@@ -345,6 +401,7 @@ window.UIManager = (function () {
 
                 thumb.textContent =
                     item.id;
+
             }
 
 
@@ -354,17 +411,22 @@ window.UIManager = (function () {
 
 
             /*
-             * Title
+             * ====================================================
+             * TITLE
+             * ====================================================
              */
 
             var itemTitle =
-                document.createElement('div');
+                document.createElement(
+                    'div'
+                );
 
             itemTitle.className =
                 'option-title';
 
             itemTitle.textContent =
-                item.name || item.id;
+                item.name ||
+                item.id;
 
             card.appendChild(
                 itemTitle
@@ -372,23 +434,31 @@ window.UIManager = (function () {
 
 
             /*
-             * Price
+             * ====================================================
+             * PRICE
+             * ====================================================
              */
 
             var price =
-                document.createElement('div');
+                document.createElement(
+                    'div'
+                );
 
             price.className =
                 'option-price';
 
+
             var itemPrice =
                 Number(item.price) || 0;
 
+
             price.textContent =
                 itemPrice
-                    ? itemPrice.toLocaleString('vi-VN') +
-                      ' VNĐ'
+                    ? itemPrice.toLocaleString(
+                        'vi-VN'
+                    ) + ' VNĐ'
                     : 'Miễn phí';
+
 
             card.appendChild(
                 price
@@ -396,7 +466,9 @@ window.UIManager = (function () {
 
 
             /*
-             * Selection event
+             * ====================================================
+             * SELECTION
+             * ====================================================
              */
 
             if (!disabled) {
@@ -412,8 +484,10 @@ window.UIManager = (function () {
                                 value: item.id
                             }
                         );
+
                     }
                 );
+
             }
 
 
@@ -427,7 +501,386 @@ window.UIManager = (function () {
         root.appendChild(
             section
         );
+
     };
+
+
+    /*
+     * ============================================================
+     * WALL GROUP SECTION
+     *
+     * The 11-panel topology:
+     *
+     * 1 ↔ 2
+     * 3 ↔ 5
+     * 4
+     * 6 ↔ 8
+     * 7
+     * 9 ↔ 11
+     * 10
+     * ============================================================
+     */
+
+    UI.prototype.panelGroupSection = function (
+        root,
+        title,
+        key,
+        items,
+        current,
+        description
+    ) {
+
+        if (
+            !root ||
+            !Array.isArray(items)
+        ) {
+            return;
+        }
+
+
+        var section =
+            document.createElement(
+                'section'
+            );
+
+        section.className =
+            'config-section panel-group-section';
+
+
+        /*
+         * Heading
+         */
+
+        var heading =
+            document.createElement(
+                'h3'
+            );
+
+        heading.textContent =
+            title;
+
+        section.appendChild(
+            heading
+        );
+
+
+        /*
+         * Description
+         */
+
+        if (description) {
+
+            var descriptionElement =
+                document.createElement(
+                    'div'
+                );
+
+            descriptionElement.className =
+                'panel-group-description';
+
+            descriptionElement.textContent =
+                description;
+
+            section.appendChild(
+                descriptionElement
+            );
+
+        }
+
+
+        /*
+         * Grid
+         */
+
+        var grid =
+            document.createElement(
+                'div'
+            );
+
+        grid.className =
+            'options-grid';
+
+        section.appendChild(
+            grid
+        );
+
+
+        var self = this;
+
+
+        items.forEach(function (item) {
+
+            var card =
+                document.createElement(
+                    'button'
+                );
+
+            card.type =
+                'button';
+
+            card.className =
+                'option-card' +
+                (
+                    item.id === current
+                        ? ' selected'
+                        : ''
+                );
+
+
+            /*
+             * Thumbnail
+             */
+
+            var thumb =
+                document.createElement(
+                    'div'
+                );
+
+
+            if (item.texturePath) {
+
+                thumb.className =
+                    'option-thumb';
+
+                thumb.style.backgroundImage =
+                    'url("' +
+                    item.texturePath
+                        .replace(/"/g, '') +
+                    '")';
+
+            } else {
+
+                thumb.className =
+                    'option-thumb-fallback';
+
+                thumb.textContent =
+                    item.id;
+
+            }
+
+
+            card.appendChild(
+                thumb
+            );
+
+
+            /*
+             * Title
+             */
+
+            var itemTitle =
+                document.createElement(
+                    'div'
+                );
+
+            itemTitle.className =
+                'option-title';
+
+            itemTitle.textContent =
+                item.name ||
+                item.id;
+
+            card.appendChild(
+                itemTitle
+            );
+
+
+            /*
+             * Price
+             */
+
+            var price =
+                document.createElement(
+                    'div'
+                );
+
+            price.className =
+                'option-price';
+
+
+            var itemPrice =
+                Number(item.price) || 0;
+
+
+            price.textContent =
+                itemPrice
+                    ? itemPrice.toLocaleString(
+                        'vi-VN'
+                    ) + ' VNĐ'
+                    : 'Miễn phí';
+
+
+            card.appendChild(
+                price
+            );
+
+
+            /*
+             * Select
+             */
+
+            card.addEventListener(
+                'click',
+                function () {
+
+                    self.emit(
+                        'select',
+                        {
+                            key: key,
+                            value: item.id
+                        }
+                    );
+
+                }
+            );
+
+
+            grid.appendChild(
+                card
+            );
+
+        });
+
+
+        root.appendChild(
+            section
+        );
+
+    };
+
+
+    /*
+     * ============================================================
+     * WALL GROUPS
+     * ============================================================
+     */
+
+    UI.prototype.wallGroups =
+        function (root, state) {
+
+            var walls =
+                CONFIG.CATALOGS.WALLS || [];
+
+
+            /*
+             * ----------------------------------------------------
+             * 1 ↔ 2
+             * ----------------------------------------------------
+             */
+
+            this.panelGroupSection(
+                root,
+                'Cánh gà cửa — Tấm 1 + 2',
+                'panel12',
+                walls,
+                state.panel12 ||
+                    state.wallLeft,
+                'Hai tấm nhỏ hai bên cửa dùng chung vật liệu.'
+            );
+
+
+            /*
+             * ----------------------------------------------------
+             * 3 ↔ 5
+             * ----------------------------------------------------
+             */
+
+            this.panelGroupSection(
+                root,
+                'Vách trái — Tấm 3 + 5',
+                'panel35',
+                walls,
+                state.panel35 ||
+                    state.wallLeft,
+                'Hai tấm nhỏ hai bên tấm trung tâm 4.'
+            );
+
+
+            /*
+             * ----------------------------------------------------
+             * 4
+             * ----------------------------------------------------
+             */
+
+            this.panelGroupSection(
+                root,
+                'Vách trái — Tấm 4',
+                'panel4',
+                walls,
+                state.panel4 ||
+                    state.wallLeft,
+                'Tấm lớn trung tâm — cấu hình độc lập.'
+            );
+
+
+            /*
+             * ----------------------------------------------------
+             * 6 ↔ 8
+             * ----------------------------------------------------
+             */
+
+            this.panelGroupSection(
+                root,
+                'Vách sau — Tấm 6 + 8',
+                'panel68',
+                walls,
+                state.panel68 ||
+                    state.wallBack,
+                'Hai tấm nhỏ hai bên tấm trung tâm 7.'
+            );
+
+
+            /*
+             * ----------------------------------------------------
+             * 7
+             * ----------------------------------------------------
+             */
+
+            this.panelGroupSection(
+                root,
+                'Vách sau — Tấm 7',
+                'panel7',
+                walls,
+                state.panel7 ||
+                    state.wallBack,
+                'Tấm lớn trung tâm — cấu hình độc lập.'
+            );
+
+
+            /*
+             * ----------------------------------------------------
+             * 9 ↔ 11
+             * ----------------------------------------------------
+             */
+
+            this.panelGroupSection(
+                root,
+                'Vách phải — Tấm 9 + 11',
+                'panel911',
+                walls,
+                state.panel911 ||
+                    state.wallRight,
+                'Hai tấm nhỏ hai bên tấm trung tâm 10.'
+            );
+
+
+            /*
+             * ----------------------------------------------------
+             * 10
+             * ----------------------------------------------------
+             */
+
+            this.panelGroupSection(
+                root,
+                'Vách phải — Tấm 10',
+                'panel10',
+                walls,
+                state.panel10 ||
+                    state.wallRight,
+                'Tấm lớn trung tâm — cấu hình độc lập.'
+            );
+
+        };
 
 
     /*
@@ -456,7 +909,9 @@ window.UIManager = (function () {
 
 
         /*
-         * Cabin model
+         * ====================================================
+         * CABIN MODEL
+         * ====================================================
          */
 
         this.section(
@@ -469,18 +924,30 @@ window.UIManager = (function () {
 
 
         /*
-         * Wall mode
+         * ====================================================
+         * WALL MODE
+         *
+         * Giữ lại SAME / INDEPENDENT.
+         *
+         * SAME vẫn tương thích với state 3 vách cũ.
+         * Các nhóm 11 panel có thể được điều khiển độc lập
+         * trong hệ thống mới.
+         * ====================================================
          */
 
         var modeSection =
-            document.createElement('section');
+            document.createElement(
+                'section'
+            );
 
         modeSection.className =
             'config-section';
 
 
         var modeHeading =
-            document.createElement('h3');
+            document.createElement(
+                'h3'
+            );
 
         modeHeading.textContent =
             'Chế độ vách';
@@ -491,7 +958,9 @@ window.UIManager = (function () {
 
 
         var modeSelector =
-            document.createElement('div');
+            document.createElement(
+                'div'
+            );
 
         modeSelector.className =
             'wall-mode-selector';
@@ -500,13 +969,19 @@ window.UIManager = (function () {
         var self = this;
 
 
-        ['SAME', 'INDEPENDENT'].forEach(
+        [
+            'SAME',
+            'INDEPENDENT'
+        ].forEach(
             function (value) {
 
                 var button =
-                    document.createElement('button');
+                    document.createElement(
+                        'button'
+                    );
 
-                button.type = 'button';
+                button.type =
+                    'button';
 
                 button.className =
                     'btn-tab' +
@@ -534,6 +1009,7 @@ window.UIManager = (function () {
                                 value: value
                             }
                         );
+
                     }
                 );
 
@@ -541,6 +1017,7 @@ window.UIManager = (function () {
                 modeSelector.appendChild(
                     button
                 );
+
             }
         );
 
@@ -556,45 +1033,64 @@ window.UIManager = (function () {
 
 
         /*
-         * Walls
+         * ====================================================
+         * 11-PANEL CONFIGURATION
+         * ====================================================
          */
 
-        this.section(
+        var wallHeading =
+            document.createElement(
+                'section'
+            );
+
+        wallHeading.className =
+            'config-section wall-layout-heading';
+
+
+        var wallTitle =
+            document.createElement(
+                'h3'
+            );
+
+        wallTitle.textContent =
+            'Cấu hình 11 tấm vách nội thất';
+
+        wallHeading.appendChild(
+            wallTitle
+        );
+
+
+        var wallDescription =
+            document.createElement(
+                'div'
+            );
+
+        wallDescription.className =
+            'panel-group-description';
+
+        wallDescription.textContent =
+            'Chọn vật liệu theo từng nhóm tấm. Các nhóm liên kết sẽ luôn đi cùng nhau.';
+
+        wallHeading.appendChild(
+            wallDescription
+        );
+
+
+        root.appendChild(
+            wallHeading
+        );
+
+
+        this.wallGroups(
             root,
-            'Vách trái',
-            'wallLeft',
-            CONFIG.CATALOGS.WALLS,
-            state.wallLeft
+            state
         );
 
 
         /*
-         * Khi SAME:
-         * vách sau và phải bị khóa UI.
-         */
-
-        this.section(
-            root,
-            'Vách sau',
-            'wallBack',
-            CONFIG.CATALOGS.WALLS,
-            state.wallBack,
-            state.wallMode === 'SAME'
-        );
-
-
-        this.section(
-            root,
-            'Vách phải',
-            'wallRight',
-            CONFIG.CATALOGS.WALLS,
-            state.wallRight,
-            state.wallMode === 'SAME'
-        );
-
-
-        /*
-         * Material
+         * ====================================================
+         * MATERIAL
+         * ====================================================
          */
 
         this.section(
@@ -607,7 +1103,9 @@ window.UIManager = (function () {
 
 
         /*
-         * Color
+         * ====================================================
+         * COLOR
+         * ====================================================
          */
 
         this.section(
@@ -620,20 +1118,29 @@ window.UIManager = (function () {
 
 
         /*
-         * Custom color
+         * ====================================================
+         * CUSTOM COLOR
+         * ====================================================
          */
 
-        if (state.colorTone === 'CUSTOM') {
+        if (
+            state.colorTone ===
+            'CUSTOM'
+        ) {
 
             var customSection =
-                document.createElement('section');
+                document.createElement(
+                    'section'
+                );
 
             customSection.className =
                 'config-section';
 
 
             var customHeading =
-                document.createElement('h3');
+                document.createElement(
+                    'h3'
+                );
 
             customHeading.textContent =
                 'Màu Custom';
@@ -644,14 +1151,18 @@ window.UIManager = (function () {
 
 
             var wrapper =
-                document.createElement('div');
+                document.createElement(
+                    'div'
+                );
 
             wrapper.className =
                 'color-picker-wrapper';
 
 
             var colorInput =
-                document.createElement('input');
+                document.createElement(
+                    'input'
+                );
 
             colorInput.type =
                 'color';
@@ -666,7 +1177,9 @@ window.UIManager = (function () {
 
 
             var colorText =
-                document.createElement('span');
+                document.createElement(
+                    'span'
+                );
 
             colorText.textContent =
                 colorInput.value;
@@ -683,6 +1196,7 @@ window.UIManager = (function () {
                         'customColor',
                         colorInput.value
                     );
+
                 }
             );
 
@@ -704,11 +1218,14 @@ window.UIManager = (function () {
             root.appendChild(
                 customSection
             );
+
         }
 
 
         /*
-         * Etched
+         * ====================================================
+         * ETCHED
+         * ====================================================
          */
 
         this.section(
@@ -721,7 +1238,9 @@ window.UIManager = (function () {
 
 
         /*
-         * Floor
+         * ====================================================
+         * FLOOR
+         * ====================================================
          */
 
         this.section(
@@ -734,7 +1253,9 @@ window.UIManager = (function () {
 
 
         /*
-         * Ceiling
+         * ====================================================
+         * CEILING
+         * ====================================================
          */
 
         this.section(
@@ -747,7 +1268,9 @@ window.UIManager = (function () {
 
 
         /*
-         * Handrail
+         * ====================================================
+         * HANDRAIL
+         * ====================================================
          */
 
         this.section(
@@ -760,7 +1283,9 @@ window.UIManager = (function () {
 
 
         /*
+         * ====================================================
          * COP
+         * ====================================================
          */
 
         this.section(
@@ -773,7 +1298,9 @@ window.UIManager = (function () {
 
 
         /*
-         * Lighting
+         * ====================================================
+         * LIGHTING
+         * ====================================================
          */
 
         this.section(
@@ -783,6 +1310,7 @@ window.UIManager = (function () {
             CONFIG.CATALOGS.LIGHTINGS,
             state.lighting
         );
+
     };
 
 
@@ -817,10 +1345,14 @@ window.UIManager = (function () {
                 this.el('loading-text');
 
             if (textElement) {
+
                 textElement.textContent =
                     text;
+
             }
+
         }
+
     };
 
 
@@ -846,6 +1378,7 @@ window.UIManager = (function () {
             state === 'OPEN'
                 ? 'Đóng cửa'
                 : 'Mở cửa';
+
     };
 
 
@@ -872,8 +1405,11 @@ window.UIManager = (function () {
 
 
         element.textContent =
-            amount.toLocaleString('vi-VN') +
+            amount.toLocaleString(
+                'vi-VN'
+            ) +
             ' VNĐ';
+
     };
 
 
@@ -923,6 +1459,7 @@ window.UIManager = (function () {
                 },
                 2200
             );
+
     };
 
 
@@ -944,7 +1481,10 @@ window.UIManager = (function () {
             this.el('quote-modal');
 
 
-        if (!breakdown || !modal) {
+        if (
+            !breakdown ||
+            !modal
+        ) {
             return;
         }
 
@@ -953,33 +1493,41 @@ window.UIManager = (function () {
 
 
         /*
-         * Dùng DOM thay vì innerHTML với dữ liệu catalog.
+         * Rows
          */
 
         (rows || []).forEach(
             function (row) {
 
                 var line =
-                    document.createElement('div');
+                    document.createElement(
+                        'div'
+                    );
 
                 line.className =
                     'quote-row';
 
 
                 var label =
-                    document.createElement('span');
+                    document.createElement(
+                        'span'
+                    );
 
                 label.textContent =
                     row.label || '';
 
 
                 var price =
-                    document.createElement('strong');
+                    document.createElement(
+                        'strong'
+                    );
 
                 price.textContent =
                     (
                         Number(row.price) || 0
-                    ).toLocaleString('vi-VN') +
+                    ).toLocaleString(
+                        'vi-VN'
+                    ) +
                     ' VNĐ';
 
 
@@ -995,6 +1543,7 @@ window.UIManager = (function () {
                 breakdown.appendChild(
                     line
                 );
+
             }
         );
 
@@ -1004,26 +1553,34 @@ window.UIManager = (function () {
          */
 
         var totalRow =
-            document.createElement('div');
+            document.createElement(
+                'div'
+            );
 
         totalRow.className =
             'quote-total';
 
 
         var totalLabel =
-            document.createElement('span');
+            document.createElement(
+                'span'
+            );
 
         totalLabel.textContent =
             'Tổng cộng';
 
 
         var totalPrice =
-            document.createElement('strong');
+            document.createElement(
+                'strong'
+            );
 
         totalPrice.textContent =
             (
                 Number(total) || 0
-            ).toLocaleString('vi-VN') +
+            ).toLocaleString(
+                'vi-VN'
+            ) +
             ' VNĐ';
 
 
@@ -1044,6 +1601,7 @@ window.UIManager = (function () {
         modal.classList.remove(
             'hidden'
         );
+
     };
 
 
@@ -1053,20 +1611,22 @@ window.UIManager = (function () {
      * ============================================================
      */
 
-    UI.prototype.closeQuote = function () {
+    UI.prototype.closeQuote =
+        function () {
 
-        var modal =
-            this.el('quote-modal');
+            var modal =
+                this.el('quote-modal');
 
-        if (!modal) {
-            return;
-        }
+            if (!modal) {
+                return;
+            }
 
 
-        modal.classList.add(
-            'hidden'
-        );
-    };
+            modal.classList.add(
+                'hidden'
+            );
+
+        };
 
 
     /*
