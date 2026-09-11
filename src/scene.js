@@ -1,531 +1,80 @@
+/* ============================================================
+   GROVA ELEVATOR CONFIGURATOR
+   THREE.JS SCENE
+   ============================================================ */
 window.SceneManager = (function () {
+  function Manager(canvas) {
+    if (!canvas) throw new Error("Không tìm thấy canvas 3D.");
+    if (typeof THREE === "undefined") throw new Error("Three.js chưa tải.");
 
-    function Manager(canvas) {
+    this.canvas = canvas;
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0xdfe4e6);
 
-        if (!canvas) {
-            throw new Error("SceneManager: canvas not found");
-        }
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.05, 100);
+    this.camera.position.set(3.15, 2.15, 4.0);
 
-        if (typeof THREE === "undefined") {
-            throw new Error("SceneManager: THREE.js not loaded");
-        }
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: canvas,
+      antialias: true,
+      alpha: false
+    });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.outputEncoding = THREE.sRGBEncoding;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-        if (typeof THREE.OrbitControls === "undefined") {
-            throw new Error("SceneManager: OrbitControls not loaded");
-        }
+    this.controls = new THREE.OrbitControls(this.camera, canvas);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.07;
+    this.controls.minDistance = 1.45;
+    this.controls.maxDistance = 7;
+    this.controls.target.set(0, 1.15, 0);
 
-        this.canvas = canvas;
+    this.ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(8,8),
+      new THREE.MeshStandardMaterial({color:0xd4d9dc,roughness:.95,metalness:.02})
+    );
+    this.ground.rotation.x = -Math.PI / 2;
+    this.ground.position.y = -0.045;
+    this.ground.receiveShadow = true;
+    this.scene.add(this.ground);
 
-        /*
-         * ========================================================
-         * RENDERER
-         * ========================================================
-         */
+    this._resize();
+    var self = this;
+    window.addEventListener("resize", function () { self._resize(); });
+    this.animate();
+  }
 
-        this.renderer = new THREE.WebGLRenderer({
-            canvas: canvas,
-            antialias: true,
-            alpha: false,
-            powerPreference: "high-performance"
-        });
+  Manager.prototype._resize = function () {
+    var w = this.canvas.clientWidth || 800;
+    var h = this.canvas.clientHeight || 600;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / Math.max(1, h);
+    this.camera.updateProjectionMatrix();
+  };
 
-        this.renderer.setPixelRatio(
-            Math.min(
-                window.devicePixelRatio || 1,
-                2
-            )
-        );
-
-        /*
-         * Three.js r128
-         */
-        this.renderer.outputEncoding = THREE.sRGBEncoding;
-
-        this.renderer.toneMapping =
-            THREE.ACESFilmicToneMapping;
-
-        this.renderer.toneMappingExposure = 1.08;
-
-        /*
-         * Không cần shadow map toàn cảnh ở giai đoạn này.
-         * Giữ renderer nhẹ hơn trên mobile.
-         */
-
-
-        /*
-         * ========================================================
-         * SCENE
-         * ========================================================
-         */
-
-        this.scene = new THREE.Scene();
-
-        /*
-         * Nền showroom sáng, trung tính.
-         */
-        this.scene.background =
-            new THREE.Color(0xe3e8ea);
-
-
-        /*
-         * ========================================================
-         * CAMERA
-         * ========================================================
-         *
-         * FOV 48 giúp cabin không bị quá "zoom".
-         *
-         * Camera chính được đặt:
-         * - hơi lệch sang phải
-         * - hơi cao hơn trung tâm
-         * - lùi đủ xa
-         *
-         * để tạo cảm giác giống ảnh showroom mẫu.
-         */
-
-        this.camera =
-            new THREE.PerspectiveCamera(
-                48,
-                1,
-                0.05,
-                100
-            );
-
-
-        /*
-         * ========================================================
-         * ORBIT CONTROLS
-         * ========================================================
-         *
-         * Chỉ sử dụng OrbitControls để camera preset
-         * hoạt động ổn định.
-         *
-         * Người dùng KHÔNG được:
-         * - xoay
-         * - pan
-         * - zoom
-         */
-
-        this.controls =
-            new THREE.OrbitControls(
-                this.camera,
-                canvas
-            );
-
-        this.controls.enableRotate = false;
-        this.controls.enablePan = false;
-        this.controls.enableZoom = false;
-        this.controls.enableDamping = false;
-
-
-        /*
-         * ========================================================
-         * RESIZE
-         * ========================================================
-         */
-
-        this.resize();
-
-        var self = this;
-
-        this._resizeHandler = function () {
-            self.resize();
-        };
-
-        window.addEventListener(
-            "resize",
-            this._resizeHandler
-        );
-
-
-        /*
-         * ========================================================
-         * CAMERA DEFAULT
-         * ========================================================
-         */
-
-        this._currentView = "FRONT";
-
-        this.setCameraPreset("FRONT");
-
-
-        /*
-         * ========================================================
-         * SINGLE RENDER LOOP
-         * ========================================================
-         */
-
-        this._animationFrame = null;
-
-        this.animate();
-    }
-
-
-    /*
-     * ============================================================
-     * RESIZE
-     * ============================================================
-     */
-
-    Manager.prototype.resize = function () {
-
-        if (!this.canvas || !this.renderer || !this.camera) {
-            return;
-        }
-
-        var rect =
-            this.canvas.getBoundingClientRect();
-
-        var width =
-            Math.max(
-                1,
-                this.canvas.clientWidth ||
-                rect.width ||
-                1
-            );
-
-        var height =
-            Math.max(
-                1,
-                this.canvas.clientHeight ||
-                rect.height ||
-                1
-            );
-
-        this.renderer.setSize(
-            width,
-            height,
-            false
-        );
-
-        this.camera.aspect =
-            width / height;
-
-        this.camera.updateProjectionMatrix();
+  Manager.prototype.setCameraPreset = function (view) {
+    var presets = {
+      FRONT: {p:[3.15,2.15,4.0], t:[0,1.15,0]},
+      REAR: {p:[0,2.0,-4.0], t:[0,1.15,0]},
+      LEFT: {p:[-4.0,2.0,.35], t:[0,1.15,0]},
+      RIGHT:{p:[4.0,2.0,.35], t:[0,1.15,0]},
+      CEILING:{p:[2.1,4.9,2.1], t:[0,1.0,0]},
+      FLOOR:{p:[2.25,.75,2.25], t:[0,.35,0]}
     };
-
-
-    /*
-     * ============================================================
-     * CAMERA PRESETS
-     * ============================================================
-     */
-
-    Manager.prototype.setCameraPreset =
-        function (view) {
-
-            var d = CONFIG.DIMENSIONS;
-
-            var name =
-                String(
-                    view || "FRONT"
-                ).toUpperCase();
-
-            var position;
-            var target;
-
-
-            /*
-             * ====================================================
-             * FRONT
-             * ====================================================
-             *
-             * View chính.
-             *
-             * Đây là góc quan trọng nhất.
-             *
-             * Camera:
-             * - lệch nhẹ sang phải
-             * - cao hơn trung tâm một chút
-             * - đứng ngoài cabin đủ xa
-             *
-             * Kết quả mong muốn:
-             *
-             *       thấy trần
-             *          ↓
-             *      ┌─────────┐
-             *     /│         │
-             *    / │  CABIN  │
-             *   /  │         │
-             *  └─────────────┘
-             *        ↑
-             *       sàn
-             */
-
-            if (name === "FRONT") {
-
-                position =
-                    new THREE.Vector3(
-                        d.width * 0.34,
-                        d.height * 0.74,
-                        d.depth * 2.95
-                    );
-
-                target =
-                    new THREE.Vector3(
-                        0,
-                        d.height * 0.52,
-                        0
-                    );
-            }
-
-
-            /*
-             * ====================================================
-             * REAR
-             * ====================================================
-             */
-
-            else if (name === "REAR") {
-
-                position =
-                    new THREE.Vector3(
-                        -d.width * 0.28,
-                        d.height * 0.74,
-                        -d.depth * 2.85
-                    );
-
-                target =
-                    new THREE.Vector3(
-                        0,
-                        d.height * 0.52,
-                        0
-                    );
-            }
-
-
-            /*
-             * ====================================================
-             * LEFT
-             * ====================================================
-             */
-
-            else if (name === "LEFT") {
-
-                position =
-                    new THREE.Vector3(
-                        -d.width * 2.70,
-                        d.height * 0.72,
-                        d.depth * 0.38
-                    );
-
-                target =
-                    new THREE.Vector3(
-                        0,
-                        d.height * 0.52,
-                        0
-                    );
-            }
-
-
-            /*
-             * ====================================================
-             * RIGHT
-             * ====================================================
-             */
-
-            else if (name === "RIGHT") {
-
-                position =
-                    new THREE.Vector3(
-                        d.width * 2.70,
-                        d.height * 0.72,
-                        d.depth * 0.38
-                    );
-
-                target =
-                    new THREE.Vector3(
-                        0,
-                        d.height * 0.52,
-                        0
-                    );
-            }
-
-
-            /*
-             * ====================================================
-             * CEILING
-             * ====================================================
-             *
-             * View từ phía trước và phía trên.
-             *
-             * Dùng để kiểm tra:
-             * - thiết kế trần
-             * - CNC
-             * - shadow gap
-             * - LED
-             */
-
-            else if (name === "CEILING") {
-
-                position =
-                    new THREE.Vector3(
-                        d.width * 0.48,
-                        d.height * 1.95,
-                        d.depth * 1.35
-                    );
-
-                target =
-                    new THREE.Vector3(
-                        0,
-                        d.height * 0.92,
-                        0
-                    );
-            }
-
-
-            /*
-             * ====================================================
-             * FLOOR
-             * ====================================================
-             *
-             * View thấp từ phía trước.
-             *
-             * Dùng để kiểm tra:
-             * - sàn
-             * - họa tiết
-             * - tỷ lệ sàn
-             */
-
-            else if (name === "FLOOR") {
-
-                position =
-                    new THREE.Vector3(
-                        d.width * 0.42,
-                        d.height * 0.62,
-                        d.depth * 2.65
-                    );
-
-                target =
-                    new THREE.Vector3(
-                        0,
-                        0.10,
-                        0
-                    );
-            }
-
-
-            /*
-             * ====================================================
-             * FALLBACK
-             * ====================================================
-             */
-
-            else {
-
-                position =
-                    new THREE.Vector3(
-                        d.width * 0.34,
-                        d.height * 0.74,
-                        d.depth * 2.95
-                    );
-
-                target =
-                    new THREE.Vector3(
-                        0,
-                        d.height * 0.52,
-                        0
-                    );
-            }
-
-
-            /*
-             * ====================================================
-             * APPLY CAMERA
-             * ====================================================
-             */
-
-            this._currentView = name;
-
-            this.camera.position.copy(
-                position
-            );
-
-            this.camera.lookAt(
-                target
-            );
-
-            this.controls.target.copy(
-                target
-            );
-
-            this.controls.update();
-
-
-            /*
-             * Render ngay sau khi đổi view.
-             */
-
-            this.render();
-        };
-
-
-    /*
-     * ============================================================
-     * COMPATIBILITY ALIAS
-     * ============================================================
-     */
-
-    Manager.prototype.setPresetView =
-        function (view) {
-
-            this.setCameraPreset(view);
-        };
-
-
-    /*
-     * ============================================================
-     * RENDER
-     * ============================================================
-     */
-
-    Manager.prototype.render =
-        function () {
-
-            if (
-                !this.renderer ||
-                !this.scene ||
-                !this.camera
-            ) {
-                return;
-            }
-
-            this.renderer.render(
-                this.scene,
-                this.camera
-            );
-        };
-
-
-    /*
-     * ============================================================
-     * ANIMATION LOOP
-     * ============================================================
-     *
-     * Chỉ có MỘT render loop.
-     */
-
-    Manager.prototype.animate =
-        function () {
-
-            var self = this;
-
-            this._animationFrame =
-                requestAnimationFrame(
-                    function () {
-                        self.animate();
-                    }
-                );
-
-            self.render();
-        };
-
-
-    /*
-     * ============================================================
-     * RETURN
-     * ============================================================
-     */
-
-    return Manager;
-
+    var x = presets[view] || presets.FRONT;
+    this.camera.position.set(x.p[0],x.p[1],x.p[2]);
+    this.controls.target.set(x.t[0],x.t[1],x.t[2]);
+    this.controls.update();
+  };
+
+  Manager.prototype.animate = function () {
+    var self = this;
+    requestAnimationFrame(function () { self.animate(); });
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+  };
+
+  return Manager;
 })();
