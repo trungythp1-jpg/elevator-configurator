@@ -9,10 +9,11 @@
                 )
             );
 
-
         this.token = 0;
 
         this.animation = null;
+
+        this.generationToken = null;
 
 
         this.scene =
@@ -132,10 +133,125 @@
 
                             break;
                         }
+
                     }
 
                 });
 
+
+            /*
+             * ====================================================
+             * 11-PANEL OPTIONAL STATE
+             *
+             * Các key này được hỗ trợ từ bây giờ.
+             * CONFIG.DEFAULT_STATE chưa cần thay đổi.
+             *
+             * Group:
+             * 1 ↔ 2
+             * 3 ↔ 5
+             * 4
+             * 6 ↔ 8
+             * 7
+             * 9 ↔ 11
+             * 10
+             * ====================================================
+             */
+
+            var panelGroups = [
+                "panel12",
+                "panel35",
+                "panel4",
+                "panel68",
+                "panel7",
+                "panel911",
+                "panel10"
+            ];
+
+
+            panelGroups.forEach(
+                function (key) {
+
+                    var value =
+                        raw[key];
+
+                    var list =
+                        CONFIG.CATALOGS.WALLS || [];
+
+
+                    for (
+                        var i = 0;
+                        i < list.length;
+                        i++
+                    ) {
+
+                        if (
+                            list[i].id === value
+                        ) {
+
+                            s[key] = value;
+
+                            break;
+                        }
+
+                    }
+
+                }
+            );
+
+
+            /*
+             * ====================================================
+             * INDIVIDUAL PANEL STATE
+             *
+             * Forward-compatible với cabin.js.
+             *
+             * Chưa bắt buộc UI phải dùng.
+             * ====================================================
+             */
+
+            for (
+                var panel = 1;
+                panel <= 11;
+                panel++
+            ) {
+
+                var panelKey =
+                    "panel" + panel;
+
+                var panelValue =
+                    raw[panelKey];
+
+                var wallList =
+                    CONFIG.CATALOGS.WALLS || [];
+
+
+                for (
+                    var j = 0;
+                    j < wallList.length;
+                    j++
+                ) {
+
+                    if (
+                        wallList[j].id ===
+                        panelValue
+                    ) {
+
+                        s[panelKey] =
+                            panelValue;
+
+                        break;
+                    }
+
+                }
+
+            }
+
+
+            /*
+             * ====================================================
+             * WALL MODE
+             * ====================================================
+             */
 
             if (
                 raw.wallMode === "SAME" ||
@@ -146,6 +262,12 @@
                     raw.wallMode;
             }
 
+
+            /*
+             * ====================================================
+             * CUSTOM COLOR
+             * ====================================================
+             */
 
             if (
                 /^#[0-9a-f]{6}$/i
@@ -159,6 +281,12 @@
             }
 
 
+            /*
+             * ====================================================
+             * DOOR
+             * ====================================================
+             */
+
             if (
                 raw.doorState === "OPEN" ||
                 raw.doorState === "CLOSED"
@@ -170,8 +298,11 @@
 
 
             /*
-             * SAME:
-             * vách trái là nguồn.
+             * ====================================================
+             * SAME
+             *
+             * Vách trái là nguồn.
+             * ====================================================
              */
 
             if (
@@ -278,6 +409,10 @@
             var self = this;
 
 
+            /*
+             * CAMERA
+             */
+
             this.ui.on(
                 "camera",
                 function (view) {
@@ -291,9 +426,21 @@
             );
 
 
+            /*
+             * STANDARD SELECT
+             */
+
             this.ui.on(
                 "select",
                 function (option) {
+
+                    if (
+                        !option ||
+                        !option.key
+                    ) {
+                        return;
+                    }
+
 
                     self.state[
                         option.key
@@ -301,9 +448,9 @@
 
 
                     /*
-                     * SAME:
-                     * vách trái điều khiển
-                     * cả 3 vách.
+                     * =================================================
+                     * SAME
+                     * =================================================
                      */
 
                     if (
@@ -321,6 +468,11 @@
                     }
 
 
+                    /*
+                     * Khi đang SAME,
+                     * wallLeft là nguồn.
+                     */
+
                     if (
                         option.key ===
                             "wallLeft" &&
@@ -336,24 +488,108 @@
                     }
 
 
+                    /*
+                     * =================================================
+                     * PANEL GROUPS
+                     *
+                     * Đồng bộ cặp theo đúng topology 11 panel.
+                     * =================================================
+                     */
+
+                    if (
+                        option.key ===
+                        "panel12"
+                    ) {
+
+                        self.state.panel1 =
+                            option.value;
+
+                        self.state.panel2 =
+                            option.value;
+                    }
+
+
+                    if (
+                        option.key ===
+                        "panel35"
+                    ) {
+
+                        self.state.panel3 =
+                            option.value;
+
+                        self.state.panel5 =
+                            option.value;
+                    }
+
+
+                    if (
+                        option.key ===
+                        "panel68"
+                    ) {
+
+                        self.state.panel6 =
+                            option.value;
+
+                        self.state.panel8 =
+                            option.value;
+                    }
+
+
+                    if (
+                        option.key ===
+                        "panel911"
+                    ) {
+
+                        self.state.panel9 =
+                            option.value;
+
+                        self.state.panel11 =
+                            option.value;
+                    }
+
+
+                    /*
+                     * Central panels remain independent:
+                     *
+                     * panel4
+                     * panel7
+                     * panel10
+                     */
+
+
                     self.rebuild();
 
                 }
             );
 
+
+            /*
+             * CUSTOM COLOR
+             */
 
             this.ui.on(
                 "customColor",
                 function (hex) {
 
-                    self.state.customColor =
-                        hex;
+                    if (
+                        /^#[0-9a-f]{6}$/i
+                            .test(hex || "")
+                    ) {
+
+                        self.state.customColor =
+                            hex;
+
+                    }
 
                     self.rebuild();
 
                 }
             );
 
+
+            /*
+             * DOOR
+             */
 
             this.ui.on(
                 "door",
@@ -364,6 +600,10 @@
                 }
             );
 
+
+            /*
+             * SAVE
+             */
 
             this.ui.on(
                 "save",
@@ -385,6 +625,10 @@
             );
 
 
+            /*
+             * SHARE
+             */
+
             this.ui.on(
                 "share",
                 function () {
@@ -395,11 +639,17 @@
             );
 
 
+            /*
+             * RESET
+             */
+
             this.ui.on(
                 "reset",
                 function () {
 
                     self.cancelAnimation();
+
+                    self.cancelGeneration();
 
 
                     self.state =
@@ -433,6 +683,10 @@
             );
 
 
+            /*
+             * QUOTE
+             */
+
             this.ui.on(
                 "quote",
                 function () {
@@ -443,6 +697,10 @@
             );
 
 
+            /*
+             * CLOSE QUOTE
+             */
+
             this.ui.on(
                 "closeQuote",
                 function () {
@@ -452,6 +710,10 @@
                 }
             );
 
+
+            /*
+             * SUBMIT QUOTE
+             */
 
             this.ui.on(
                 "submitQuote",
@@ -515,12 +777,24 @@
             }
 
 
+            /*
+             * Cabin model.
+             */
+
             total +=
                 price(
                     "CABIN_MODELS",
                     s.cabinModel
                 );
 
+
+            /*
+             * Existing 3-wall pricing contract.
+             *
+             * Không tự ý đổi sang 11-panel pricing
+             * ở bước này vì CONFIG hiện tại vẫn định nghĩa
+             * WALLS theo 3 vách.
+             */
 
             if (
                 s.wallMode === "SAME"
@@ -555,12 +829,20 @@
             }
 
 
+            /*
+             * Material.
+             */
+
             total +=
                 price(
                     "MATERIALS",
                     s.material
                 );
 
+
+            /*
+             * Etched.
+             */
 
             total +=
                 price(
@@ -569,12 +851,20 @@
                 );
 
 
+            /*
+             * Floor.
+             */
+
             total +=
                 price(
                     "FLOORS",
                     s.floor
                 );
 
+
+            /*
+             * Ceiling.
+             */
 
             total +=
                 price(
@@ -583,6 +873,10 @@
                 );
 
 
+            /*
+             * Handrail.
+             */
+
             total +=
                 price(
                     "HANDRAILS",
@@ -590,12 +884,20 @@
                 );
 
 
+            /*
+             * COP.
+             */
+
             total +=
                 price(
                     "COPS",
                     s.cop
                 );
 
+
+            /*
+             * Lighting.
+             */
 
             total +=
                 price(
@@ -605,6 +907,26 @@
 
 
             return total;
+        };
+
+
+    /*
+     * ============================================================
+     * CANCEL GENERATION
+     * ============================================================
+     */
+
+    App.prototype.cancelGeneration =
+        function () {
+
+            if (
+                this.generationToken
+            ) {
+
+                this.generationToken.cancelled =
+                    true;
+            }
+
         };
 
 
@@ -620,12 +942,32 @@
             var self = this;
 
 
+            /*
+             * New generation.
+             */
+
             var token =
                 ++this.token;
 
 
+            /*
+             * Cancel previous door animation.
+             */
+
             this.cancelAnimation();
 
+
+            /*
+             * IMPORTANT:
+             * Cancel previous cabin generation.
+             */
+
+            this.cancelGeneration();
+
+
+            /*
+             * UI.
+             */
 
             this.ui.render(
                 this.state
@@ -710,13 +1052,22 @@
              */
 
             var generationToken = {
+
                 cancelled: false,
+
                 id: token
+
             };
 
 
+            this.generationToken =
+                generationToken;
+
+
             /*
-             * Callback kiểm tra generation.
+             * ====================================================
+             * CURRENT CHECK
+             * ====================================================
              */
 
             function isCurrent(
@@ -727,8 +1078,11 @@
                     currentToken &&
                     currentToken.id ===
                         self.token &&
-                    currentToken.cancelled !== true
+                    currentToken.cancelled !== true &&
+                    self.generationToken ===
+                        currentToken
                 );
+
             }
 
 
@@ -739,38 +1093,64 @@
              */
 
             Promise.resolve()
-                .then(function () {
 
-                    return self.cabin.updateCabin(
-                        self.state,
-                        generationToken,
-                        isCurrent
-                    );
-
-                })
                 .then(function () {
 
                     if (
-                        token !== self.token
+                        !isCurrent(
+                            generationToken
+                        )
                     ) {
+                        return false;
+                    }
+
+
+                    return self.cabin
+                        .updateCabin(
+                            self.state,
+                            generationToken,
+                            isCurrent
+                        );
+
+                })
+
+                .then(function (result) {
+
+                    /*
+                     * Build was cancelled.
+                     */
+
+                    if (
+                        result === false ||
+                        !isCurrent(
+                            generationToken
+                        )
+                    ) {
+
                         return;
+
                     }
 
 
                     /*
-                     * Door state.
+                     * =================================================
+                     * DOOR STATE
+                     * =================================================
                      */
 
-                    self.cabin.setDoorProgress(
-                        self.state.doorState ===
-                            "OPEN"
-                            ? 1
-                            : 0
-                    );
+                    self.cabin
+                        .setDoorProgress(
+                            self.state.doorState ===
+                                "OPEN"
+                                ? 1
+                                : 0
+                        );
 
 
                     /*
-                     * Price.
+                     * =================================================
+                     * PRICE
+                     * =================================================
                      */
 
                     self.ui.price(
@@ -779,16 +1159,21 @@
 
 
                     /*
-                     * Camera.
+                     * =================================================
+                     * CAMERA
+                     * =================================================
                      */
 
-                    self.scene.setCameraPreset(
-                        "FRONT"
-                    );
+                    self.scene
+                        .setCameraPreset(
+                            "FRONT"
+                        );
 
 
                     /*
-                     * Finish.
+                     * =================================================
+                     * FINISH
+                     * =================================================
                      */
 
                     self.ui.loading(
@@ -796,10 +1181,17 @@
                     );
 
                 })
+
                 .catch(function (error) {
 
+                    /*
+                     * Ignore obsolete generations.
+                     */
+
                     if (
-                        token !== self.token
+                        !isCurrent(
+                            generationToken
+                        )
                     ) {
                         return;
                     }
@@ -832,7 +1224,7 @@
 
     /*
      * ============================================================
-     * CANCEL
+     * CANCEL DOOR ANIMATION
      * ============================================================
      */
 
@@ -932,11 +1324,12 @@
                               2;
 
 
-                self.cabin.setDoorProgress(
-                    from +
-                    (to - from) *
-                    eased
-                );
+                self.cabin
+                    .setDoorProgress(
+                        from +
+                        (to - from) *
+                        eased
+                    );
 
 
                 if (
@@ -1112,12 +1505,20 @@
             }
 
 
+            /*
+             * Cabin model.
+             */
+
             add(
                 "Mẫu cabin",
                 "CABIN_MODELS",
                 s.cabinModel
             );
 
+
+            /*
+             * Walls.
+             */
 
             var wall =
                 find(
@@ -1214,6 +1615,10 @@
             }
 
 
+            /*
+             * Other options.
+             */
+
             add(
                 "Vật liệu",
                 "MATERIALS",
@@ -1299,13 +1704,17 @@
 
 
                 /*
-                 * Camera FRONT mới.
+                 * Initial camera.
                  */
 
                 app.scene.setCameraPreset(
                     "FRONT"
                 );
 
+
+                /*
+                 * Initial build.
+                 */
 
                 app.rebuild();
 
