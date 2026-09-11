@@ -1,6 +1,165 @@
-window.MaterialManager=(function(){let instance;function create(){const loader=new THREE.TextureLoader(),tc=new Map(),pc=new Map(),mc=new Map(),failed=new Set();
-function loadTexture(path,isData){const k=(isData?"data:":"color:")+path;if(!path)return Promise.reject(Error("No path"));if(failed.has(k))return Promise.reject(Error("Previously failed"));if(tc.has(k))return Promise.resolve(tc.get(k));if(pc.has(k))return pc.get(k);const p=new Promise((res,rej)=>loader.load(path,t=>{t.encoding=isData?THREE.LinearEncoding:THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;tc.set(k,t);pc.delete(k);res(t)},undefined,e=>{failed.add(k);pc.delete(k);rej(e)}));pc.set(k,p);return p}
-function hairline(){const c=document.createElement("canvas");c.width=c.height=512;const x=c.getContext("2d");x.fillStyle="#c9c9c9";x.fillRect(0,0,512,512);for(let i=0;i<512;i++){x.fillStyle="rgba(160,160,160,.22)";x.fillRect(i,0,1,512)}const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
-async function getWallMaterial(w,m,color,etched,wid=1.4,hei=2.4){const k=[w&&w.id,m&&m.id,color,etched&&etched.id,wid,hei].join("|");if(mc.has(k))return mc.get(k);const o={color:new THREE.Color(color||"#d0d0d0"),metalness:.85,roughness:.25,side:THREE.DoubleSide};let t=null;if(w&&w.texturePath)try{t=await loadTexture(w.texturePath,false)}catch(e){}if(!t&&w&&w.id==="I03")t=hairline();if(t){t=t.clone();t.repeat.set(Math.max(1,wid),Math.max(1,hei));o.map=t}if(etched&&etched.id!=="NONE"&&etched.bumpPath)try{const b=(await loadTexture(etched.bumpPath,true)).clone();b.repeat.set(Math.max(1,wid),Math.max(1,hei));o.bumpMap=b;o.bumpScale=.045}catch(e){}const mat=new THREE.MeshStandardMaterial(o);mc.set(k,mat);return mat}
-async function getFloorMaterial(f,w=1.4,d=1.2){const k=["floor",f&&f.id,w,d].join("|");if(mc.has(k))return mc.get(k);const o={color:0xd5d5d5,roughness:.5,metalness:.08};if(f&&f.texturePath)try{const t=(await loadTexture(f.texturePath,false)).clone();t.repeat.set(Math.max(1,w),Math.max(1,d));o.map=t}catch(e){}const mat=new THREE.MeshStandardMaterial(o);mc.set(k,mat);return mat}
-return{loadTexture,getWallMaterial,getFloorMaterial}}return{getInstance(){return instance||(instance=create())}}})();
+window.MaterialManager = (function () {
+    let instance;
+
+    function createInstance() {
+        const textureLoader = new THREE.TextureLoader();
+        const textureCache = new Map();
+        const promiseCache = new Map();
+        const materialCache = new Map();
+        const failedAssets = new Set();
+
+        function loadTexture(path) {
+            if (!path) return Promise.reject(new Error("No path provided"));
+            if (failedAssets.has(path)) {
+                return Promise.reject(new Error(`Asset previously failed: ${path}`));
+            }
+            if (textureCache.has(path)) {
+                return Promise.resolve(textureCache.get(path));
+            }
+            if (promiseCache.has(path)) {
+                return promiseCache.get(path);
+            }
+
+            const promise = new Promise((resolve, reject) => {
+                textureLoader.load(
+                    path,
+                    (texture) => {
+                        texture.encoding = THREE.sRGBEncoding;
+                        textureCache.set(path, texture);
+                        promiseCache.delete(path);
+                        resolve(texture);
+                    },
+                    undefined,
+                    (err) => {
+                        failedAssets.add(path);
+                        promiseCache.delete(path);
+                        reject(err);
+                    }
+                );
+            });
+
+            promiseCache.set(path, promise);
+            return promise;
+        }
+
+        function createProceduralHairlineTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#cccccc';
+            ctx.fillRect(0, 0, 512, 512);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            for (let i = 0; i < 2000; i++) {
+                const x = Math.random() * 512;
+                const y = Math.random() * 512;
+                ctx.fillRect(x, y, 1, Math.random() * 40 + 10);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+
+        async function getWallMaterial(wallConfig, materialConfig, colorToneHex, etchedConfig, surfaceWidth = 1.4, surfaceHeight = 2.4) {
+            const cacheKey = `${wallConfig?.id}_${materialConfig?.id}_${colorToneHex}_${etchedConfig?.id}_${surfaceWidth}x${surfaceHeight}`;
+            if (materialCache.has(cacheKey)) {
+                return materialCache.get(cacheKey);
+            }
+
+            const matOptions = {
+                color: new THREE.Color(colorToneHex || materialConfig?.color || '#d0d0d0'),
+                roughness: materialConfig?.roughness ?? 0.3,
+                metalness: materialConfig?.metalness ?? 0.9,
+                side: THREE.DoubleSide
+            };
+
+            let texture = null;
+            if (wallConfig?.texturePath) {
+                try {
+                    texture = await loadTexture(wallConfig.texturePath);
+                } catch (e) {
+                    texture = createProceduralHairlineTexture();
+                }
+            }
+
+            if (texture) {
+                const clonedTex = texture.clone();
+                clonedTex.needsUpdate = true;
+                clonedTex.wrapS = THREE.RepeatWrapping;
+                clonedTex.wrapT = THREE.RepeatWrapping;
+                clonedTex.repeat.set(surfaceWidth / 1.0, surfaceHeight / 1.0);
+                matOptions.map = clonedTex;
+            }
+
+            if (etchedConfig && etchedConfig.id !== 'NONE' && etchedConfig.texturePath) {
+                try {
+                    const etchedTex = await loadTexture(etchedConfig.texturePath);
+                    const clonedEtched = etchedTex.clone();
+                    clonedEtched.needsUpdate = true;
+                    clonedEtched.wrapS = THREE.RepeatWrapping;
+                    clonedEtched.wrapT = THREE.RepeatWrapping;
+                    clonedEtched.repeat.set(surfaceWidth / 1.0, surfaceHeight / 1.0);
+                    matOptions.bumpMap = clonedEtched;
+                    matOptions.bumpScale = 0.05;
+                } catch (e) {
+                    // Fallback ignoring etched bump if missing
+                }
+            }
+
+            const mat = new THREE.MeshStandardMaterial(matOptions);
+            materialCache.set(cacheKey, mat);
+            return mat;
+        }
+
+        async function getFloorMaterial(floorConfig, width = 1.4, depth = 1.2) {
+            const cacheKey = `floor_${floorConfig?.id}_${width}x${depth}`;
+            if (materialCache.has(cacheKey)) {
+                return materialCache.get(cacheKey);
+            }
+
+            const matOptions = {
+                color: new THREE.Color(floorConfig?.color || '#555555'),
+                roughness: 0.4,
+                metalness: 0.1,
+                side: THREE.DoubleSide
+            };
+
+            if (floorConfig?.texturePath) {
+                try {
+                    const texture = await loadTexture(floorConfig.texturePath);
+                    const clonedTex = texture.clone();
+                    clonedTex.needsUpdate = true;
+                    clonedTex.wrapS = THREE.RepeatWrapping;
+                    clonedTex.wrapT = THREE.RepeatWrapping;
+                    clonedTex.repeat.set(width / 1.0, depth / 1.0);
+                    matOptions.map = clonedTex;
+                } catch (e) {
+                    // Failover to pure color
+                }
+            }
+
+            const mat = new THREE.MeshStandardMaterial(matOptions);
+            materialCache.set(cacheKey, mat);
+            return mat;
+        }
+
+        return {
+            loadTexture,
+            getWallMaterial,
+            getFloorMaterial
+        };
+    }
+
+    return {
+        getInstance: function () {
+            if (!instance) {
+                instance = createInstance();
+            }
+            return instance;
+        }
+    };
+})();
