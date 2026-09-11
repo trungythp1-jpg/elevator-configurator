@@ -1,165 +1,75 @@
-window.MaterialManager = (function () {
-    let instance;
-
-    function createInstance() {
-        const textureLoader = new THREE.TextureLoader();
-        const textureCache = new Map();
-        const promiseCache = new Map();
-        const materialCache = new Map();
-        const failedAssets = new Set();
-
-        function loadTexture(path) {
-            if (!path) return Promise.reject(new Error("No path provided"));
-            if (failedAssets.has(path)) {
-                return Promise.reject(new Error(`Asset previously failed: ${path}`));
-            }
-            if (textureCache.has(path)) {
-                return Promise.resolve(textureCache.get(path));
-            }
-            if (promiseCache.has(path)) {
-                return promiseCache.get(path);
-            }
-
-            const promise = new Promise((resolve, reject) => {
-                textureLoader.load(
-                    path,
-                    (texture) => {
-                        texture.encoding = THREE.sRGBEncoding;
-                        textureCache.set(path, texture);
-                        promiseCache.delete(path);
-                        resolve(texture);
-                    },
-                    undefined,
-                    (err) => {
-                        failedAssets.add(path);
-                        promiseCache.delete(path);
-                        reject(err);
-                    }
-                );
-            });
-
-            promiseCache.set(path, promise);
-            return promise;
-        }
-
-        function createProceduralHairlineTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
-            const ctx = canvas.getContext('2d');
-
-            ctx.fillStyle = '#cccccc';
-            ctx.fillRect(0, 0, 512, 512);
-
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-            for (let i = 0; i < 2000; i++) {
-                const x = Math.random() * 512;
-                const y = Math.random() * 512;
-                ctx.fillRect(x, y, 1, Math.random() * 40 + 10);
-            }
-
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            return texture;
-        }
-
-        async function getWallMaterial(wallConfig, materialConfig, colorToneHex, etchedConfig, surfaceWidth = 1.4, surfaceHeight = 2.4) {
-            const cacheKey = `${wallConfig?.id}_${materialConfig?.id}_${colorToneHex}_${etchedConfig?.id}_${surfaceWidth}x${surfaceHeight}`;
-            if (materialCache.has(cacheKey)) {
-                return materialCache.get(cacheKey);
-            }
-
-            const matOptions = {
-                color: new THREE.Color(colorToneHex || materialConfig?.color || '#d0d0d0'),
-                roughness: materialConfig?.roughness ?? 0.3,
-                metalness: materialConfig?.metalness ?? 0.9,
-                side: THREE.DoubleSide
-            };
-
-            let texture = null;
-            if (wallConfig?.texturePath) {
-                try {
-                    texture = await loadTexture(wallConfig.texturePath);
-                } catch (e) {
-                    texture = createProceduralHairlineTexture();
-                }
-            }
-
-            if (texture) {
-                const clonedTex = texture.clone();
-                clonedTex.needsUpdate = true;
-                clonedTex.wrapS = THREE.RepeatWrapping;
-                clonedTex.wrapT = THREE.RepeatWrapping;
-                clonedTex.repeat.set(surfaceWidth / 1.0, surfaceHeight / 1.0);
-                matOptions.map = clonedTex;
-            }
-
-            if (etchedConfig && etchedConfig.id !== 'NONE' && etchedConfig.texturePath) {
-                try {
-                    const etchedTex = await loadTexture(etchedConfig.texturePath);
-                    const clonedEtched = etchedTex.clone();
-                    clonedEtched.needsUpdate = true;
-                    clonedEtched.wrapS = THREE.RepeatWrapping;
-                    clonedEtched.wrapT = THREE.RepeatWrapping;
-                    clonedEtched.repeat.set(surfaceWidth / 1.0, surfaceHeight / 1.0);
-                    matOptions.bumpMap = clonedEtched;
-                    matOptions.bumpScale = 0.05;
-                } catch (e) {
-                    // Fallback ignoring etched bump if missing
-                }
-            }
-
-            const mat = new THREE.MeshStandardMaterial(matOptions);
-            materialCache.set(cacheKey, mat);
-            return mat;
-        }
-
-        async function getFloorMaterial(floorConfig, width = 1.4, depth = 1.2) {
-            const cacheKey = `floor_${floorConfig?.id}_${width}x${depth}`;
-            if (materialCache.has(cacheKey)) {
-                return materialCache.get(cacheKey);
-            }
-
-            const matOptions = {
-                color: new THREE.Color(floorConfig?.color || '#555555'),
-                roughness: 0.4,
-                metalness: 0.1,
-                side: THREE.DoubleSide
-            };
-
-            if (floorConfig?.texturePath) {
-                try {
-                    const texture = await loadTexture(floorConfig.texturePath);
-                    const clonedTex = texture.clone();
-                    clonedTex.needsUpdate = true;
-                    clonedTex.wrapS = THREE.RepeatWrapping;
-                    clonedTex.wrapT = THREE.RepeatWrapping;
-                    clonedTex.repeat.set(width / 1.0, depth / 1.0);
-                    matOptions.map = clonedTex;
-                } catch (e) {
-                    // Failover to pure color
-                }
-            }
-
-            const mat = new THREE.MeshStandardMaterial(matOptions);
-            materialCache.set(cacheKey, mat);
-            return mat;
-        }
-
-        return {
-            loadTexture,
-            getWallMaterial,
-            getFloorMaterial
-        };
+window.MaterialManager = (function(){
+  var instance = null;
+  function Manager(){
+    this.textureLoader = new THREE.TextureLoader();
+    this.textureCache = new Map();
+    this.materialCache = new Map();
+    this.failedAssets = new Set();
+  }
+  Manager.prototype._texture = function(path,isData){
+    if(!path) return Promise.resolve(null);
+    if(this.failedAssets.has(path)) return Promise.resolve(null);
+    if(this.textureCache.has(path)) return this.textureCache.get(path);
+    var self=this;
+    var p=new Promise(function(resolve){
+      self.textureLoader.load(path,function(t){
+        t.wrapS=t.wrapT=THREE.RepeatWrapping;
+        t.encoding=isData?THREE.LinearEncoding:THREE.sRGBEncoding;
+        resolve(t);
+      },undefined,function(){
+        self.failedAssets.add(path); resolve(null);
+      });
+    });
+    this.textureCache.set(path,p);
+    return p;
+  };
+  Manager.prototype._repeat = function(t,w,h){
+    if(!t)return;
+    t.repeat.set(Math.max(1,w/0.7),Math.max(1,h/1.8));
+  };
+  Manager.prototype._fallback = function(id){
+    var colors={I01:0xb9bec0,I02:0xe2e5e6,I03:0xb8bdc0,I04:0xb3b8ba,I05:0xb3b8ba,I06:0xd4b04a,I07:0xc6a354,I08:0x8e6654};
+    var m=new THREE.MeshStandardMaterial({
+      color:colors[id]||0xb9bec0, metalness:.88, roughness:id==="I02"?.14:.27, side:THREE.DoubleSide
+    });
+    if(id==="I03"||id==="I01"){
+      var c=document.createElement("canvas"); c.width=256;c.height=256;
+      var x=c.getContext("2d"); x.fillStyle="#b9bec0";x.fillRect(0,0,256,256);
+      for(var y=0;y<256;y+=2){x.fillStyle="rgba(255,255,255,"+(0.10+Math.random()*.12)+")";x.fillRect(0,y,256,1);}
+      var t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(2,4);t.encoding=THREE.sRGBEncoding;
+      m.map=t;
     }
-
-    return {
-        getInstance: function () {
-            if (!instance) {
-                instance = createInstance();
-            }
-            return instance;
-        }
-    };
+    return m;
+  };
+  Manager.prototype.getWallMaterial = function(wall,base,colorTone,etched,w,h){
+    var id=wall.id+"|"+base.id+"|"+(colorTone||"DEFAULT")+"|"+etched.id+"|"+w+"|"+h;
+    if(this.materialCache.has(id))return Promise.resolve(this.materialCache.get(id));
+    var self=this, path=wall.texturePath||null;
+    return this._texture(path,false).then(function(t){
+      var c=colorTone?new THREE.Color(colorTone):null;
+      var m=t?new THREE.MeshStandardMaterial({map:t,metalness:.88,roughness:.25,side:THREE.DoubleSide}):self._fallback(wall.id);
+      if(t)self._repeat(t,w,h);
+      if(c){m.color.copy(c);}
+      if(etched && etched.bumpPath){
+        return self._texture(etched.bumpPath,true).then(function(b){
+          if(b){self._repeat(b,w,h);m.bumpMap=b;m.bumpScale=.055;}
+          self.materialCache.set(id,m);return m;
+        });
+      }
+      self.materialCache.set(id,m);return m;
+    });
+  };
+  Manager.prototype.getFloorMaterial = function(floor,w,d){
+    var id=floor.id+"|"+w+"|"+d;
+    if(this.materialCache.has(id))return Promise.resolve(this.materialCache.get(id));
+    var self=this;
+    return this._texture(floor.texturePath,false).then(function(t){
+      var m=t?new THREE.MeshStandardMaterial({map:t,metalness:.10,roughness:.62}):
+        new THREE.MeshStandardMaterial({color:0xc7c0b6,metalness:.08,roughness:.68});
+      if(t)self._repeat(t,w,d);
+      self.materialCache.set(id,m);return m;
+    });
+  };
+  Manager.prototype.getInstance=function(){return this;};
+  return { getInstance:function(){ if(!instance)instance=new Manager(); return instance; } };
 })();
