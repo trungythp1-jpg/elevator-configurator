@@ -1,269 +1,116 @@
-window.CabinBuilder = (function () {
-    function CabinBuilder(scene) {
-        this.scene = scene;
-        this.cabinGroup = new THREE.Group();
-        this.scene.add(this.cabinGroup);
-
-        this.gltfLoader = new THREE.GLTFLoader();
-        this.materialManager = window.MaterialManager.getInstance();
-        
-        this.modelCache = new Map();
-        this.promiseCache = new Map();
-
-        this.doorLeftMesh = null;
-        this.doorRightMesh = null;
-        this.doorProgress = 1.0; // 1.0 OPEN, 0.0 CLOSED
+window.CabinBuilder = (function(){
+  function Builder(scene){
+    this.scene=scene;
+    this.root=new THREE.Group();
+    this.root.name="Cabin";
+    scene.add(this.root);
+    this.mm=MaterialManager.getInstance();
+    this.loader=new THREE.GLTFLoader();
+    this.gltfCache=new Map();
+    this.door={left:null,right:null,progress:1};
+  }
+  Builder.prototype.clear=function(){
+    var self=this;
+    this.root.traverse(function(o){ if(o.isMesh && o.geometry)o.geometry.dispose(); });
+    while(this.root.children.length)this.root.remove(this.root.children[0]);
+    this.door.left=null;this.door.right=null;
+  };
+  Builder.prototype.load=function(path){
+    if(!path)return Promise.reject(new Error("no asset"));
+    if(this.gltfCache.has(path))return this.gltfCache.get(path);
+    var self=this;
+    var p=new Promise(function(resolve,reject){self.loader.load(path,resolve,undefined,reject);});
+    this.gltfCache.set(path,p);return p;
+  };
+  Builder.prototype.mesh=function(parent,g,m,x,y,z,name){
+    var q=new THREE.Mesh(g,m);q.position.set(x,y,z);q.name=name||"Mesh";q.castShadow=true;q.receiveShadow=true;parent.add(q);return q;
+  };
+  Builder.prototype.build=function(s,token,isCurrent){
+    var self=this,d=CONFIG.DIMENSIONS,c=CONFIG.CATALOGS;
+    var wl=CONFIG.find("WALLS",s.wallLeft)||c.WALLS[0];
+    var wb=CONFIG.find("WALLS",s.wallBack)||c.WALLS[0];
+    var wr=CONFIG.find("WALLS",s.wallRight)||c.WALLS[0];
+    var base=CONFIG.find("MATERIALS",s.material)||c.MATERIALS[0];
+    var etched=CONFIG.find("ETCHEDS",s.etched)||c.ETCHEDS[0];
+    var floor=CONFIG.find("FLOORS",s.floor)||c.FLOORS[0];
+    var tone=CONFIG.find("COLORS",s.colorTone);
+    var hex=s.colorTone==="CUSTOM"?s.customColor:(tone&&tone.hex);
+    return Promise.all([
+      self.mm.getWallMaterial(wl,base,hex,etched,d.width,d.height),
+      self.mm.getWallMaterial(wb,base,hex,etched,d.width,d.height),
+      self.mm.getWallMaterial(wr,base,hex,etched,d.depth,d.height),
+      self.mm.getFloorMaterial(floor,d.width,d.depth)
+    ]).then(function(ms){
+      if(!isCurrent(token))return;
+      var shell=new THREE.Group();shell.name="InteriorShell";self.root.add(shell);
+      var q=.035;
+      self.mesh(shell,new THREE.BoxGeometry(d.width,d.height,q),ms[1],0,d.height/2,-d.depth/2,"BackWall");
+      self.mesh(shell,new THREE.BoxGeometry(q,d.height,d.depth),ms[0],-d.width/2,d.height/2,0,"LeftWall");
+      self.mesh(shell,new THREE.BoxGeometry(q,d.height,d.depth),ms[2],d.width/2,d.height/2,0,"RightWall");
+      self.mesh(shell,new THREE.BoxGeometry(d.width,.05,d.depth),ms[3],0,.025,0,"Floor");
+      self.ceiling();
+      self.door();
+      return self.components(s,token,isCurrent);
+    });
+  };
+  Builder.prototype.ceiling=function(){
+    var d=CONFIG.DIMENSIONS,g=new THREE.Group();g.name="ArchitecturalCeiling";this.root.add(g);
+    var outer=new THREE.MeshStandardMaterial({color:0xf3f0e9,roughness:.72});
+    var inner=new THREE.MeshStandardMaterial({color:0xe5e0d6,roughness:.62});
+    var dark=new THREE.MeshStandardMaterial({color:0x373a3c,metalness:.5,roughness:.34});
+    var cnc=new THREE.MeshStandardMaterial({color:0xb8b0a3,metalness:.32,roughness:.42});
+    var glow=new THREE.MeshStandardMaterial({color:0xfff8e8,emissive:0xffe5ad,emissiveIntensity:2.2});
+    this.mesh(g,new THREE.BoxGeometry(d.width-.08,.04,d.depth-.08),outer,0,d.height-.06,0,"CeilingOuter");
+    this.mesh(g,new THREE.BoxGeometry(d.width-.24,.025,d.depth-.24),dark,0,d.height-.035,0,"ShadowGap");
+    this.mesh(g,new THREE.BoxGeometry(d.width-.31,.025,d.depth-.31),inner,0,d.height-.012,0,"CeilingInner");
+    this.mesh(g,new THREE.BoxGeometry(d.width*.46,.016,d.depth*.42),cnc,0,d.height+.004,0,"CentralCNC");
+    [-.39,.39].forEach(function(x){this.mesh(g,new THREE.BoxGeometry(.028,.012,d.depth-.34),glow,x,d.height+.014,0,"HiddenLED");},this);
+  };
+  Builder.prototype.door=function(){
+    var d=CONFIG.DIMENSIONS,w=d.width*.235,h=d.height*.87,z=d.depth/2-.045;
+    var dm=new THREE.MeshStandardMaterial({color:0xbfc3c5,metalness:.88,roughness:.22});
+    var fm=new THREE.MeshStandardMaterial({color:0x2b2e31,metalness:.65,roughness:.30});
+    var frame=new THREE.Group();frame.name="DoorFrame";this.root.add(frame);
+    this.mesh(frame,new THREE.BoxGeometry(.04,h+.04,.055),fm,-d.width/2+.02,h/2,z+.035,"FrameL");
+    this.mesh(frame,new THREE.BoxGeometry(.04,h+.04,.055),fm,d.width/2-.02,h/2,z+.035,"FrameR");
+    this.mesh(frame,new THREE.BoxGeometry(d.width,.04,.055),fm,0,h+.02,z+.035,"FrameTop");
+    this.door.left=this.mesh(this.root,new THREE.BoxGeometry(w,h,.05),dm,-w/2,h/2,z,"DoorLeft");
+    this.door.right=this.mesh(this.root,new THREE.BoxGeometry(w,h,.05),dm,w/2,h/2,z,"DoorRight");
+  };
+  Builder.prototype.components=function(s,token,isCurrent){
+    var self=this,d=CONFIG.DIMENSIONS,c=CONFIG.CATALOGS;
+    var h=CONFIG.find("HANDRAILS",s.handrail),p=CONFIG.find("COPS",s.cop);
+    var jobs=[];
+    if(h&&h.id!=="NONE")jobs.push(self.assetOrFallback(h,"Handrail",new THREE.Vector3(0,d.height*.43,-d.depth/2+.08),.78,token,isCurrent));
+    if(p&&p.id!=="NONE")jobs.push(self.assetOrFallback(p,"COP",new THREE.Vector3(d.width/2-.08,d.height*.52,0),.65,token,isCurrent));
+    return Promise.all(jobs);
+  };
+  Builder.prototype.assetOrFallback=function(item,name,pos,target,token,isCurrent){
+    var self=this;
+    if(!item.modelPath)return Promise.resolve(self.fallback(item,name,pos));
+    return this.load(item.modelPath).then(function(gltf){
+      if(!isCurrent(token))return;
+      var g=gltf.scene.clone(true),box=new THREE.Box3().setFromObject(g),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),max=Math.max(size.x,size.y,size.z)||1,sc=target/max;
+      g.scale.setScalar(sc);g.position.set(pos.x-center.x*sc,pos.y-center.y*sc,pos.z-center.z*sc);g.name=name+"Asset";
+      g.traverse(function(o){if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+      self.root.add(g);
+    }).catch(function(){ if(isCurrent(token))self.fallback(item,name,pos); });
+  };
+  Builder.prototype.fallback=function(item,name,pos){
+    var g=new THREE.Group();g.name=name+"Fallback";this.root.add(g);
+    var m=new THREE.MeshStandardMaterial({color:name==="COP"?0x202326:0xc6c9cb,metalness:.78,roughness:.24});
+    if(name==="Handrail"){
+      var bar=new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,1.0,24),m);bar.rotation.z=Math.PI/2;bar.position.copy(pos);g.add(bar);
+    }else{
+      var p=new THREE.Mesh(new THREE.BoxGeometry(.12,.55,.035),m);p.position.copy(pos);g.add(p);
     }
-
-    CabinBuilder.prototype.loadGLTF = function (path) {
-        if (this.modelCache.has(path)) {
-            return Promise.resolve(this.modelCache.get(path).clone());
-        }
-        if (this.promiseCache.has(path)) {
-            return this.promiseCache.get(path).then(gltf => gltf.clone());
-        }
-
-        const promise = new Promise((resolve, reject) => {
-            this.gltfLoader.load(
-                path,
-                (gltf) => {
-                    this.modelCache.set(path, gltf.scene);
-                    this.promiseCache.delete(path);
-                    resolve(gltf.scene.clone());
-                },
-                undefined,
-                (err) => {
-                    this.promiseCache.delete(path);
-                    reject(err);
-                }
-            );
-        });
-
-        this.promiseCache.set(path, promise);
-        return promise;
-    };
-
-    CabinBuilder.prototype.clearCurrentProcedural = function () {
-        while (this.cabinGroup.children.length > 0) {
-            const child = this.cabinGroup.children[0];
-            this.cabinGroup.remove(child);
-
-            child.traverse((node) => {
-                if (node.isMesh) {
-                    if (node.geometry) node.geometry.dispose();
-                    // DO NOT dispose cached materials/textures managed by MaterialManager
-                }
-            });
-        }
-        this.doorLeftMesh = null;
-        this.doorRightMesh = null;
-    };
-
-    CabinBuilder.prototype.buildCabin = async function (state, generationToken) {
-        this.clearCurrentProcedural();
-
-        const dims = window.CONFIG.DIMENSIONS;
-        const catalogs = window.CONFIG.CATALOGS;
-
-        const modelConfig = catalogs.CABIN_MODELS.find(m => m.id === state.cabinModel);
-        let loadedGlb = null;
-
-        if (modelConfig && modelConfig.modelPath) {
-            try {
-                loadedGlb = await this.loadGLTF(modelConfig.modelPath);
-            } catch (e) {
-                // Procedural fallback
-            }
-        }
-
-        if (generationToken && generationToken.cancelled) return;
-
-        if (loadedGlb) {
-            this.cabinGroup.add(loadedGlb);
-            await this.applyCustomizationsToGLB(loadedGlb, state);
-        } else {
-            await this.buildProceduralCabin(state, dims, catalogs);
-        }
-
-        if (generationToken && generationToken.cancelled) return;
-
-        this.updateDoorProgress(state.doorState === 'OPEN' ? 1.0 : 0.0);
-    };
-
-    CabinBuilder.prototype.buildProceduralCabin = async function (state, dims, catalogs) {
-        const matMgr = this.materialManager;
-        const colorHex = state.colorTone === 'CUSTOM' ? state.customColor : null;
-        const etchedConfig = catalogs.ETCHEDS.find(e => e.id === state.etched);
-        const materialConfig = catalogs.MATERIALS.find(m => m.id === state.material);
-
-        // Resolve Walls
-        const leftWallConfig = catalogs.WALLS.find(w => w.id === state.wallLeft);
-        const backWallConfig = catalogs.WALLS.find(w => w.id === state.wallBack);
-        const rightWallConfig = catalogs.WALLS.find(w => w.id === state.wallRight);
-
-        const leftMat = await matMgr.getWallMaterial(leftWallConfig, materialConfig, colorHex, etchedConfig, dims.depth, dims.height);
-        const backMat = await matMgr.getWallMaterial(backWallConfig, materialConfig, colorHex, etchedConfig, dims.width, dims.height);
-        const rightMat = await matMgr.getWallMaterial(rightWallConfig, materialConfig, colorHex, etchedConfig, dims.depth, dims.height);
-
-        // Left Wall
-        const leftGeo = new THREE.PlaneGeometry(dims.depth, dims.height);
-        const leftMesh = new THREE.Mesh(leftGeo, leftMat);
-        leftMesh.position.set(-dims.width / 2, dims.height / 2, 0);
-        leftMesh.rotation.y = Math.PI / 2;
-        this.cabinGroup.add(leftMesh);
-
-        // Right Wall
-        const rightGeo = new THREE.PlaneGeometry(dims.depth, dims.height);
-        const rightMesh = new THREE.Mesh(rightGeo, rightMat);
-        rightMesh.position.set(dims.width / 2, dims.height / 2, 0);
-        rightMesh.rotation.y = -Math.PI / 2;
-        this.cabinGroup.add(rightMesh);
-
-        // Back Wall
-        const backGeo = new THREE.PlaneGeometry(dims.width, dims.height);
-        const backMesh = new THREE.Mesh(backGeo, backMat);
-        backMesh.position.set(0, dims.height / 2, -dims.depth / 2);
-        this.cabinGroup.add(backMesh);
-
-        // Floor
-        const floorConfig = catalogs.FLOORS.find(f => f.id === state.floor);
-        const floorMat = await matMgr.getFloorMaterial(floorConfig, dims.width, dims.depth);
-        const floorGeo = new THREE.PlaneGeometry(dims.width, dims.depth);
-        const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-        floorMesh.position.set(0, 0, 0);
-        floorMesh.rotation.x = -Math.PI / 2;
-        this.cabinGroup.add(floorMesh);
-
-        // Ceiling
-        await this.buildCeiling(state, dims, catalogs);
-
-        // Handrail
-        await this.buildHandrail(state, dims, catalogs);
-
-        // COP
-        await this.buildCOP(state, dims, catalogs);
-
-        // Doors
-        this.buildDoors(dims, leftMat);
-    };
-
-    CabinBuilder.prototype.buildCeiling = async function (state, dims, catalogs) {
-        const ceilingConfig = catalogs.CEILINGS.find(c => c.id === state.ceiling);
-        let ceilingLoaded = false;
-
-        if (ceilingConfig && ceilingConfig.modelPath) {
-            try {
-                const model = await this.loadGLTF(ceilingConfig.modelPath);
-                model.position.set(0, dims.height, 0);
-                this.cabinGroup.add(model);
-                ceilingLoaded = true;
-            } catch (e) {}
-        }
-
-        if (!ceilingLoaded) {
-            const ceilingGroup = new THREE.Group();
-            ceilingGroup.position.set(0, dims.height, 0);
-
-            const baseGeo = new THREE.PlaneGeometry(dims.width, dims.depth);
-            const baseMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.8, side: THREE.DoubleSide });
-            const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-            baseMesh.rotation.x = Math.PI / 2;
-            ceilingGroup.add(baseMesh);
-
-            // Frame gap
-            const frameGeo = new THREE.BoxGeometry(dims.width - 0.1, 0.02, dims.depth - 0.1);
-            const frameMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
-            const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-            frameMesh.position.set(0, -0.01, 0);
-            ceilingGroup.add(frameMesh);
-
-            this.cabinGroup.add(ceilingGroup);
-        }
-    };
-
-    CabinBuilder.prototype.buildHandrail = async function (state, dims, catalogs) {
-        if (state.handrail === 'NONE') return;
-
-        const handrailConfig = catalogs.HANDRAILS.find(h => h.id === state.handrail);
-        let loaded = false;
-
-        if (handrailConfig && handrailConfig.modelPath) {
-            try {
-                const model = await this.loadGLTF(handrailConfig.modelPath);
-                model.position.set(0, 1.0, -dims.depth / 2 + 0.05);
-                this.cabinGroup.add(model);
-                loaded = true;
-            } catch (e) {}
-        }
-
-        if (!loaded) {
-            const group = new THREE.Group();
-            const railGeo = new THREE.CylinderGeometry(0.02, 0.02, dims.width - 0.2);
-            const railMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.2 });
-            const railMesh = new THREE.Mesh(railGeo, railMat);
-            railMesh.rotation.z = Math.PI / 2;
-            railMesh.position.set(0, 1.0, -dims.depth / 2 + 0.05);
-            group.add(railMesh);
-            this.cabinGroup.add(group);
-        }
-    };
-
-    CabinBuilder.prototype.buildCOP = async function (state, dims, catalogs) {
-        if (state.cop === 'NONE') return;
-
-        const copConfig = catalogs.COPS.find(c => c.id === state.cop);
-        let loaded = false;
-
-        if (copConfig && copConfig.modelPath) {
-            try {
-                const model = await this.loadGLTF(copConfig.modelPath);
-                model.position.set(dims.width / 2 - 0.02, 1.2, 0);
-                this.cabinGroup.add(model);
-                loaded = true;
-            } catch (e) {}
-        }
-
-        if (!loaded) {
-            const panelGeo = new THREE.BoxGeometry(0.01, 1.0, 0.25);
-            const panelMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.3 });
-            const panelMesh = new THREE.Mesh(panelGeo, panelMat);
-            panelMesh.position.set(dims.width / 2 - 0.01, 1.2, 0);
-            this.cabinGroup.add(panelMesh);
-        }
-    };
-
-    CabinBuilder.prototype.buildDoors = function (dims, material) {
-        const doorWidth = dims.width / 2;
-        const doorGeo = new THREE.BoxGeometry(doorWidth, dims.height, 0.02);
-
-        this.doorLeftMesh = new THREE.Mesh(doorGeo, material);
-        this.doorRightMesh = new THREE.Mesh(doorGeo, material);
-
-        this.doorLeftMesh.position.set(-doorWidth / 2, dims.height / 2, dims.depth / 2);
-        this.doorRightMesh.position.set(doorWidth / 2, dims.height / 2, dims.depth / 2);
-
-        this.cabinGroup.add(this.doorLeftMesh);
-        this.cabinGroup.add(this.doorRightMesh);
-    };
-
-    CabinBuilder.prototype.applyCustomizationsToGLB = async function (glbScene, state) {
-        // Direct GLB mapping hook if nodes exist
-    };
-
-    CabinBuilder.prototype.updateDoorProgress = function (progress) {
-        this.doorProgress = Math.max(0.0, Math.min(1.0, progress));
-        if (!this.doorLeftMesh || !this.doorRightMesh) return;
-
-        const dims = window.CONFIG.DIMENSIONS;
-        const doorWidth = dims.width / 2;
-        const closedLeftX = -doorWidth / 2;
-        const closedRightX = doorWidth / 2;
-
-        const openOffset = doorWidth * 0.9;
-
-        this.doorLeftMesh.position.x = closedLeftX - (openOffset * this.doorProgress);
-        this.doorRightMesh.position.x = closedRightX + (openOffset * this.doorProgress);
-    };
-
-    return CabinBuilder;
+  };
+  Builder.prototype.setDoorProgress=function(v){
+    this.door.progress=Math.max(0,Math.min(1,v));
+    if(!this.door.left||!this.door.right)return;
+    var d=CONFIG.DIMENSIONS,w=d.width*.235,dist=d.width*.43;
+    this.door.left.position.x=-w/2-dist*this.door.progress;
+    this.door.right.position.x=w/2+dist*this.door.progress;
+  };
+  return Builder;
 })();
