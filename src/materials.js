@@ -1,521 +1,194 @@
+/* ============================================================
+   GROVA ELEVATOR CONFIGURATOR
+   MATERIAL / TEXTURE ENGINE
+   ============================================================ */
 window.MaterialManager = (function () {
+  var singleton = null;
 
-    var instance = null;
+  function Manager() {
+    this.textureLoader = new THREE.TextureLoader();
+    this.textureCache = new Map();
+    this.materialCache = new Map();
+    this.failed = new Set();
+  }
 
-    function Manager() {
-        this.textureLoader = new THREE.TextureLoader();
+  Manager.prototype.texture = function (path) {
+    var self = this;
+    if (!path || this.failed.has(path)) return Promise.resolve(null);
+    if (this.textureCache.has(path)) return this.textureCache.get(path);
 
-        // Cache Promise texture để nhiều request cùng asset
-        // không tạo nhiều HTTP request.
-        this.textureCache = new Map();
+    var promise = new Promise(function (resolve) {
+      self.textureLoader.load(
+        path,
+        function (texture) {
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapT = THREE.RepeatWrapping;
+          texture.encoding = THREE.sRGBEncoding;
+          resolve(texture);
+        },
+        undefined,
+        function () {
+          self.failed.add(path);
+          resolve(null);
+        }
+      );
+    });
 
-        // Cache material đã tạo.
-        this.materialCache = new Map();
+    this.textureCache.set(path, promise);
+    return promise;
+  };
 
-        // Asset đã lỗi thì không thử tải lại liên tục.
-        this.failedAssets = new Set();
+  Manager.prototype.applyRepeat = function (texture, width, height) {
+    if (!texture) return;
+    texture.repeat.set(
+      Math.max(1, Number(width || 1) / 0.55),
+      Math.max(1, Number(height || 1) / 1.80)
+    );
+  };
+
+  Manager.prototype.color = function (tone, custom) {
+    if (tone === "CUSTOM") return new THREE.Color(custom || "#ffffff");
+    var item = (CONFIG.CATALOGS.COLORS || []).find(function (x) { return x.id === tone; });
+    return item && item.hex ? new THREE.Color(item.hex) : null;
+  };
+
+  Manager.prototype.wallFallback = function (id) {
+    var colors = {
+      I01:0xb9bec0, I02:0xe2e5e6, I03:0xb8bec0, I04:0xaeb4b7,
+      I05:0xaeb4b7, I06:0xd1ad45, I07:0xc4a25a, I08:0x8b6455
+    };
+    return new THREE.MeshStandardMaterial({
+      color: colors[id] || 0xb8bec0,
+      metalness: 0.90,
+      roughness: id === "I02" ? 0.12 : 0.28,
+      side: THREE.DoubleSide
+    });
+  };
+
+  Manager.prototype.etchedBump = function (id) {
+    if (id === "NONE") return null;
+
+    var canvas = document.createElement("canvas");
+    canvas.width = 192;
+    canvas.height = 192;
+    var ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, 192, 192);
+    ctx.strokeStyle = "rgba(255,255,255,.26)";
+    ctx.lineWidth = 2;
+
+    var i, x;
+    if (id === "E03") {
+      for (i=0;i<=192;i+=24) {
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,192); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(192,i); ctx.stroke();
+      }
+    } else if (id === "E04") {
+      for (i=-192;i<384;i+=32) {
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i+192,192); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(i,192); ctx.lineTo(i+192,0); ctx.stroke();
+      }
+    } else if (id === "E05") {
+      for (x=-20;x<220;x+=30) {
+        for (i=15;i<210;i+=30) {
+          ctx.beginPath(); ctx.arc(x + (i%60?15:0), i, 13, 0, Math.PI*2); ctx.stroke();
+        }
+      }
+    } else if (id === "E06") {
+      for (i=-20;i<220;i+=34) {
+        ctx.beginPath();
+        for (x=0;x<=192;x+=8) {
+          ctx.lineTo(x, i + 12*Math.sin(x/13));
+        }
+        ctx.stroke();
+      }
+    } else if (id === "E02") {
+      for (i=20;i<190;i+=42) {
+        ctx.beginPath(); ctx.arc(96,i,20,0,Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(96,i,8,0,Math.PI*2); ctx.stroke();
+      }
+    } else {
+      for (i=0;i<192;i+=18) {
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,192); ctx.stroke();
+      }
     }
 
-    /*
-     * ============================================================
-     * TEXTURE
-     * ============================================================
-     */
+    var texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1.8, 2.6);
+    texture.encoding = THREE.LinearEncoding;
+    return texture;
+  };
 
-    Manager.prototype._texture = function (path, isData) {
-        if (!path) {
-            return Promise.resolve(null);
-        }
+  Manager.prototype.getWallMaterial = function (wall, base, width, height, state) {
+    var self = this;
+    wall = wall || CONFIG.CATALOGS.WALLS[2];
+    state = state || {};
 
-        if (this.failedAssets.has(path)) {
-            return Promise.resolve(null);
-        }
+    var tone = this.color(state.colorTone, state.customColor);
+    var key = [
+      "wall", wall.id, base && base.id, state.colorTone,
+      state.customColor, state.etched, width, height
+    ].join("|");
 
-        /*
-         * Texture cache dùng path làm source of truth.
-         * Với bump/data texture, encoding được thiết lập
-         * ngay khi texture được load.
-         */
-        if (this.textureCache.has(path)) {
-            return this.textureCache.get(path);
-        }
+    if (this.materialCache.has(key)) return Promise.resolve(this.materialCache.get(key));
 
-        var self = this;
+    return this.texture(wall.texturePath).then(function (texture) {
+      var material = texture ? new THREE.MeshStandardMaterial({
+        map: texture,
+        color: tone || 0xffffff,
+        metalness: 0.90,
+        roughness: wall.id === "I02" ? 0.13 : 0.26,
+        side: THREE.DoubleSide
+      }) : self.wallFallback(wall.id);
 
-        var promise = new Promise(function (resolve) {
+      if (texture) self.applyRepeat(texture, width, height);
+      if (tone) material.color.copy(tone);
 
-            self.textureLoader.load(
-                path,
+      var bump = self.etchedBump(state.etched);
+      if (bump) {
+        material.bumpMap = bump;
+        material.bumpScale = 0.035;
+      }
 
-                function (texture) {
-                    texture.wrapS = THREE.RepeatWrapping;
-                    texture.wrapT = THREE.RepeatWrapping;
+      self.materialCache.set(key, material);
+      return material;
+    });
+  };
 
-                    /*
-                     * Three.js r128:
-                     * - Color texture -> sRGB
-                     * - Data/bump texture -> Linear
-                     */
-                    texture.encoding = isData
-                        ? THREE.LinearEncoding
-                        : THREE.sRGBEncoding;
+  Manager.prototype.getFloorMaterial = function (item, width, depth) {
+    var self = this;
+    item = item || CONFIG.CATALOGS.FLOORS[0];
+    var key = "floor|" + item.id;
 
-                    resolve(texture);
-                },
+    if (this.materialCache.has(key)) return Promise.resolve(this.materialCache.get(key));
 
-                undefined,
-
-                function () {
-                    self.failedAssets.add(path);
-                    resolve(null);
-                }
-            );
+    return this.texture(item.texturePath).then(function (texture) {
+      var material;
+      if (texture) {
+        material = new THREE.MeshStandardMaterial({
+          map: texture,
+          metalness: 0.10,
+          roughness: 0.65
         });
-
-        this.textureCache.set(path, promise);
-
-        return promise;
-    };
-
-
-    /*
-     * ============================================================
-     * TEXTURE REPEAT
-     * ============================================================
-     */
-
-    Manager.prototype._repeat = function (texture, width, height) {
-
-        if (!texture) {
-            return;
-        }
-
-        var w = Number(width);
-        var h = Number(height);
-
-        if (!isFinite(w) || w <= 0) {
-            w = 1;
-        }
-
-        if (!isFinite(h) || h <= 0) {
-            h = 1;
-        }
-
-        /*
-         * Cabin dimensions đang dùng mét.
-         *
-         * Reference:
-         * width  ~ 0.7m
-         * height ~ 1.8m
-         */
-        texture.repeat.set(
-            Math.max(1, w / 0.7),
-            Math.max(1, h / 1.8)
-        );
-    };
-
-
-    /*
-     * ============================================================
-     * COLOR
-     * ============================================================
-     */
-
-    Manager.prototype._resolveColor = function (colorTone) {
-
-        /*
-         * DEFAULT:
-         * Không override màu vật liệu.
-         */
-        if (!colorTone || colorTone === 'DEFAULT') {
-            return null;
-        }
-
-        /*
-         * Nếu caller truyền trực tiếp HEX,
-         * giữ nguyên khả năng tương thích.
-         */
-        if (
-            typeof colorTone === 'string' &&
-            (
-                colorTone.charAt(0) === '#' ||
-                colorTone.indexOf('rgb') === 0
-            )
-        ) {
-            return new THREE.Color(colorTone);
-        }
-
-        /*
-         * Ưu tiên lấy từ CONFIG.CATALOGS.COLORS.
-         */
-        if (
-            window.CONFIG &&
-            window.CONFIG.CATALOGS &&
-            Array.isArray(window.CONFIG.CATALOGS.COLORS)
-        ) {
-
-            var item = window.CONFIG.CATALOGS.COLORS.find(function (x) {
-                return x.id === colorTone;
-            });
-
-            if (item && item.hex) {
-                return new THREE.Color(item.hex);
-            }
-
-            /*
-             * CUSTOM trong CONFIG có hex mặc định.
-             * Nhưng màu custom thực tế có thể được truyền
-             * từ state.customColor qua caller.
-             */
-            if (item && item.id === 'CUSTOM' && item.hex) {
-                return new THREE.Color(item.hex);
-            }
-        }
-
-        return null;
-    };
-
-
-    /*
-     * ============================================================
-     * FALLBACK WALL MATERIAL
-     * ============================================================
-     */
-
-    Manager.prototype._fallback = function (id) {
-
-        var colors = {
-            I01: 0xb9bec0,
-            I02: 0xe2e5e6,
-            I03: 0xb8bdc0,
-            I04: 0xb3b8ba,
-            I05: 0xb3b8ba,
-            I06: 0xd4b04a,
-            I07: 0xc6a354,
-            I08: 0x8e6654
-        };
-
-        var material = new THREE.MeshStandardMaterial({
-            color: colors[id] || 0xb9bec0,
-            metalness: 0.88,
-            roughness: id === 'I02' ? 0.14 : 0.27,
-            side: THREE.DoubleSide
+        self.applyRepeat(texture, width, depth);
+      } else {
+        var colors = {T01:0xb5afa4,T02:0xd4cec6,T03:0x66676b,T04:0xc6beb5,T05:0x77736d,T06:0x74797b};
+        material = new THREE.MeshStandardMaterial({
+          color: colors[item.id] || 0xb8b2aa,
+          metalness: 0.10,
+          roughness: 0.68
         });
-
-
-        /*
-         * Procedural fallback cho:
-         * I01 Hairline
-         * I03 Brushed
-         *
-         * Dùng CanvasTexture để cabin vẫn có
-         * vẻ inox xước ngay cả khi chưa có ảnh texture.
-         */
-        if (id === 'I03' || id === 'I01') {
-
-            var canvas = document.createElement('canvas');
-
-            canvas.width = 256;
-            canvas.height = 256;
-
-            var context = canvas.getContext('2d');
-
-            context.fillStyle = '#b9bec0';
-            context.fillRect(0, 0, 256, 256);
-
-            /*
-             * Các đường xước dọc.
-             * Không dùng màu random quá mạnh để tránh
-             * mỗi lần rebuild tạo hình ảnh khác biệt.
-             */
-            for (var y = 0; y < 256; y += 2) {
-
-                var alpha = 0.10 + ((y % 10) / 100);
-
-                context.fillStyle =
-                    'rgba(255,255,255,' + alpha + ')';
-
-                context.fillRect(0, y, 256, 1);
-            }
-
-            var texture = new THREE.CanvasTexture(canvas);
-
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-
-            texture.repeat.set(2, 4);
-
-            texture.encoding = THREE.sRGBEncoding;
-
-            material.map = texture;
-        }
-
-        return material;
-    };
-
-
-    /*
-     * ============================================================
-     * WALL MATERIAL
-     * ============================================================
-     *
-     * API giữ nguyên:
-     *
-     * getWallMaterial(
-     *     wall,
-     *     base,
-     *     colorTone,
-     *     etched,
-     *     width,
-     *     height
-     * )
-     *
-     * Trả về Promise<THREE.Material>
-     */
-
-    Manager.prototype.getWallMaterial = function (
-        wall,
-        base,
-        colorTone,
-        etched,
-        width,
-        height
-    ) {
-
-        wall = wall || {};
-        base = base || {};
-        etched = etched || {};
-
-        var wallId = wall.id || 'UNKNOWN_WALL';
-        var baseId = base.id || 'UNKNOWN_BASE';
-        var colorId = colorTone || 'DEFAULT';
-        var etchedId = etched.id || 'NONE';
-
-        var w = Number(width);
-        var h = Number(height);
-
-        if (!isFinite(w) || w <= 0) {
-            w = 1;
-        }
-
-        if (!isFinite(h) || h <= 0) {
-            h = 1;
-        }
-
-        /*
-         * Material cache key phải phân biệt:
-         * - wall
-         * - base material
-         * - color
-         * - etched
-         * - dimensions
-         */
-        var cacheKey =
-            wallId + '|' +
-            baseId + '|' +
-            colorId + '|' +
-            etchedId + '|' +
-            w + '|' +
-            h;
-
-
-        if (this.materialCache.has(cacheKey)) {
-            return Promise.resolve(
-                this.materialCache.get(cacheKey)
-            );
-        }
-
-        var self = this;
-
-        /*
-         * WALL hiện tại chủ yếu sử dụng fallback/procedural.
-         * Nếu sau này catalog bổ sung texturePath,
-         * hệ thống tự sử dụng texture thật.
-         */
-        var path = wall.texturePath || null;
-
-        return this._texture(path, false)
-            .then(function (texture) {
-
-                var material;
-
-                if (texture) {
-
-                    material = new THREE.MeshStandardMaterial({
-                        map: texture,
-                        metalness: 0.88,
-                        roughness: 0.25,
-                        side: THREE.DoubleSide
-                    });
-
-                    self._repeat(texture, w, h);
-
-                } else {
-
-                    material = self._fallback(wallId);
-                }
-
-
-                /*
-                 * Color override.
-                 *
-                 * DEFAULT -> giữ màu vật liệu.
-                 * WHITE/BLACK/GOLD/CHAMPAGNE -> lấy HEX từ CONFIG.
-                 */
-                var color = self._resolveColor(colorTone);
-
-                if (color) {
-                    material.color.copy(color);
-                }
-
-
-                /*
-                 * Etched / bump map.
-                 */
-                if (etched.bumpPath) {
-
-                    return self._texture(
-                        etched.bumpPath,
-                        true
-                    ).then(function (bumpTexture) {
-
-                        if (bumpTexture) {
-
-                            self._repeat(
-                                bumpTexture,
-                                w,
-                                h
-                            );
-
-                            material.bumpMap = bumpTexture;
-                            material.bumpScale = 0.055;
-                        }
-
-                        self.materialCache.set(
-                            cacheKey,
-                            material
-                        );
-
-                        return material;
-                    });
-                }
-
-
-                self.materialCache.set(
-                    cacheKey,
-                    material
-                );
-
-                return material;
-            });
-    };
-
-
-    /*
-     * ============================================================
-     * FLOOR MATERIAL
-     * ============================================================
-     */
-
-    Manager.prototype.getFloorMaterial = function (
-        floor,
-        width,
-        depth
-    ) {
-
-        floor = floor || {};
-
-        var floorId = floor.id || 'UNKNOWN_FLOOR';
-
-        var w = Number(width);
-        var d = Number(depth);
-
-        if (!isFinite(w) || w <= 0) {
-            w = 1;
-        }
-
-        if (!isFinite(d) || d <= 0) {
-            d = 1;
-        }
-
-        var cacheKey =
-            floorId + '|' +
-            w + '|' +
-            d;
-
-
-        if (this.materialCache.has(cacheKey)) {
-            return Promise.resolve(
-                this.materialCache.get(cacheKey)
-            );
-        }
-
-        var self = this;
-
-        return this._texture(
-            floor.texturePath,
-            false
-        ).then(function (texture) {
-
-            var material;
-
-            if (texture) {
-
-                material = new THREE.MeshStandardMaterial({
-                    map: texture,
-                    metalness: 0.10,
-                    roughness: 0.62
-                });
-
-                self._repeat(
-                    texture,
-                    w,
-                    d
-                );
-
-            } else {
-
-                /*
-                 * Fallback floor.
-                 */
-                material = new THREE.MeshStandardMaterial({
-                    color: 0xc7c0b6,
-                    metalness: 0.08,
-                    roughness: 0.68
-                });
-            }
-
-            self.materialCache.set(
-                cacheKey,
-                material
-            );
-
-            return material;
-        });
-    };
-
-
-    /*
-     * ============================================================
-     * SINGLETON
-     * ============================================================
-     */
-
-    Manager.prototype.getInstance = function () {
-        return this;
-    };
-
-
-    return {
-
-        getInstance: function () {
-
-            if (!instance) {
-                instance = new Manager();
-            }
-
-            return instance;
-        }
-    };
-
+      }
+
+      self.materialCache.set(key, material);
+      return material;
+    });
+  };
+
+  return {
+    getInstance: function () {
+      if (!singleton) singleton = new Manager();
+      return singleton;
+    }
+  };
 })();
