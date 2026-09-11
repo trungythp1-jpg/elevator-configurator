@@ -2,14 +2,15 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Elevator Configurator</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <div id="app-container">
     <main id="viewport-panel">
-      <canvas id="webgl-canvas" aria-label="3D elevator preview"></canvas>
+      <canvas id="webgl-canvas" aria-label="Mô hình 3D cabin thang máy"></canvas>
+
       <div id="camera-toolbar" role="toolbar" aria-label="Góc nhìn">
         <button class="btn-camera active" data-view="FRONT">Chính diện</button>
         <button class="btn-camera" data-view="REAR">Vách sau</button>
@@ -18,19 +19,24 @@
         <button class="btn-camera" data-view="CEILING">Trần</button>
         <button class="btn-camera" data-view="FLOOR">Sàn</button>
       </div>
+
+      <div class="viewport-badge">GROVA · ELEVATOR CONFIGURATOR</div>
+
       <button id="btn-toggle-door" class="action-btn" type="button">Đóng cửa</button>
-      <div id="loading-overlay" class="hidden">
+
+      <div id="loading-overlay">
         <div class="spinner"></div>
-        <span id="loading-text">Đang dựng cabin 3D...</span>
+        <strong id="loading-text">Đang dựng cabin 3D…</strong>
+        <span id="loading-detail">Vui lòng chờ</span>
       </div>
     </main>
 
     <aside id="sidebar-panel">
       <header class="sidebar-header">
         <div>
-          <span class="eyebrow">ELEVATOR CONFIGURATOR</span>
-          <h1>Cấu hình Cabin</h1>
-          <p>Tùy chỉnh nội thất và xem trực tiếp trên mô hình 3D.</p>
+          <span class="eyebrow">GROVA HOLDINGS</span>
+          <h1>Elevator Configurator</h1>
+          <p>Tùy chỉnh từng khu vực nội thất và xem thay đổi trực tiếp trên mô hình 3D.</p>
         </div>
       </header>
 
@@ -54,9 +60,9 @@
   <div id="quote-modal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-content">
       <button id="modal-close" class="close-btn" type="button" aria-label="Đóng">&times;</button>
-      <h2>Bảng báo giá chi tiết</h2>
+      <h2>Bảng cấu hình & báo giá</h2>
       <div id="quote-breakdown"></div>
-      <button id="btn-modal-submit" class="btn-primary" type="button">Gửi thông tin</button>
+      <button id="btn-modal-submit" class="btn-primary" type="button">Xác nhận yêu cầu</button>
     </div>
   </div>
 
@@ -70,8 +76,8 @@
   <script src="./src/config.js"></script>
   <script src="./src/materials.js"></script>
   <script src="./src/lighting.js"></script>
-  <script src="./src/cabin.js"></script>
   <script src="./src/scene.js"></script>
+  <script src="./src/cabin.js"></script>
   <script src="./src/ui.js"></script>
   <script src="./src/app.js"></script>
 </body>
